@@ -62,13 +62,11 @@ pub extern "C" fn getstate() -> ddb_playback_state_t {
 }
 
 pub extern "C" fn plugin_start() -> c_int {
-    println!("rust: plugin_start");
     DeadBeef::log_detailed(DDB_LOG_LAYER_INFO, "Hello from rust!\n");
     0
 }
 
 pub extern "C" fn plugin_stop() -> c_int {
-    println!("rust: plugin_stop");
     unsafe {
         PLUGIN = None;
     }
@@ -95,8 +93,6 @@ pub extern "C" fn enum_soundcards(
             if let Some(props) = &global.props {
                 let media_class = props.get("media.class").unwrap_or("");
                 if media_class.eq("Audio/Sink") || media_class.eq("Audio/Duplex") {
-                    // println!("New card: {:?}", global);
-
                     unsafe {
                         let n = LossyCString::new(props.get("node.name").unwrap_or(""));
                         let d = LossyCString::new(props.get("node.description").unwrap_or(""));
@@ -212,7 +208,6 @@ macro_rules! lit_cstr {
 pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
     api: *mut DB_functions_t,
 ) -> *mut DB_output_s {
-    println!("rust: plugin_load");
 
     DEADBEEF = Some(DeadBeef::init_from_ptr(api));
 
@@ -256,37 +251,6 @@ pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
             reserved3: 0,
         },
     };
-
-    /*
-    This avoid a lot of setting unused struct fields:
-
-    let mut plugin: DB_output_t = std::mem::zeroed();
-
-    plugin.plugin.api_vmajor = 1;
-    plugin.plugin.api_vminor = 0;
-    plugin.plugin.version_major = 0;
-    plugin.plugin.version_minor = 1;
-    plugin.plugin.flags = DDB_PLUGIN_FLAG_LOGGING;
-    plugin.plugin.type_ = DB_PLUGIN_OUTPUT as i32;
-    plugin.plugin.id = plugin_id.as_ptr() as *const c_char;
-    plugin.plugin.name = plugin_name.as_ptr() as *const c_char;
-    plugin.plugin.descr = plugin_desc.as_ptr() as *const c_char;
-    plugin.plugin.copyright = plugin_copyright.as_ptr() as *const c_char;
-    plugin.plugin.website = plugin_website.as_ptr() as *const c_char;
-    plugin.plugin.start = Some(plugin_start);
-    plugin.plugin.stop = Some(plugin_stop);
-    //plugin.plugin.configdialog = settings_dlg,
-    plugin.plugin.message = Some(message);
-    plugin.init = Some(init);
-    plugin.free = Some(free);
-    plugin.setformat = Some(setformat);
-    plugin.play = Some(play);
-    plugin.stop = Some(stop);
-    plugin.pause = Some(pause);
-    plugin.unpause = Some(unpause);
-    plugin.state = Some(getstate);
-    plugin.enum_soundcards = Some(enum_soundcards);
-    */
 
     PLUGIN = Some(x);
 
