@@ -3,12 +3,14 @@
 #![allow(non_snake_case)]
 #![deny(elided_lifetimes_in_paths)]
 
-use std::{cell::RefCell, rc::Rc};
-use std::sync::Mutex;
-use std::{ffi::c_int, ffi::c_char};
-use std::ffi::{CString, c_void};
+use std::ffi::{c_char, c_int, c_void, CString};
+use std::{rc::Rc, sync::Mutex};
 
-use pipewire::{MainLoop, Context, prelude::ReadableDict, registry::{GlobalObject, Registry}};
+use pipewire::{
+    prelude::ReadableDict,
+    registry::{GlobalObject, Registry},
+    Context, MainLoop,
+};
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
@@ -59,7 +61,6 @@ pub extern "C" fn getstate() -> ddb_playback_state_t {
     *state.lock().unwrap()
 }
 
-
 pub extern "C" fn plugin_start() -> c_int {
     println!("rust: plugin_start");
     DeadBeef::log_detailed(DDB_LOG_LAYER_INFO, "Hello from rust!\n");
@@ -74,9 +75,12 @@ pub extern "C" fn plugin_stop() -> c_int {
     0
 }
 
-
-pub extern "C" fn enum_soundcards(callback: Option<unsafe extern "C" fn (name: *const c_char, desc: *const c_char, _userdata: *mut c_void )>, userdata: *mut c_void ) {
-
+pub extern "C" fn enum_soundcards(
+    callback: Option<
+        unsafe extern "C" fn(name: *const c_char, desc: *const c_char, _userdata: *mut c_void),
+    >,
+    userdata: *mut c_void,
+) {
     let mainloop = Rc::new(MainLoop::new().expect("Failed to create mainloop"));
     let context = Context::new(mainloop.as_ref()).expect("Failed to create context");
     let core = context.connect(None).expect("Failed to connect to remote");
@@ -88,46 +92,42 @@ pub extern "C" fn enum_soundcards(callback: Option<unsafe extern "C" fn (name: *
     let _listener = registry
         .add_listener_local()
         .global(move |global| {
-
             if let Some(props) = &global.props {
-
                 let media_class = props.get("media.class").unwrap_or("");
                 if media_class.eq("Audio/Sink") || media_class.eq("Audio/Duplex") {
-
                     // println!("New card: {:?}", global);
 
                     unsafe {
                         let n = LossyCString::new(props.get("node.name").unwrap_or(""));
                         let d = LossyCString::new(props.get("node.description").unwrap_or(""));
-                    
+
                         if n.as_bytes().len() > 0 {
                             callback.unwrap()(n.as_ptr(), d.as_ptr(), userdata);
                         }
                     }
                 }
             }
-        }
-        
-        )
+        })
         .register();
 
     let _ml = Rc::downgrade(&mainloop);
 
-    let _corelistener = core.add_listener_local().done(move |id, seq| {_ml.upgrade().unwrap().quit()}).register();
+    let _corelistener = core
+        .add_listener_local()
+        .done(move |id, seq| _ml.upgrade().unwrap().quit())
+        .register();
 
     core.sync(0).expect("Error sync");
 
     mainloop.run();
-
-
 }
 
 pub unsafe extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_int {
     match msgid {
         DB_EV_SONGSTARTED => println!("rust: song started"),
-        _ => return 0
+        _ => return 0,
     }
-    
+
     0
 }
 
@@ -135,7 +135,6 @@ pub unsafe extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_
 pub struct DeadBeef {
     pub(crate) ptr: *mut DB_functions_t,
 }
-
 
 impl DeadBeef {
     pub unsafe fn init_from_ptr(ptr: *mut DB_functions_t) -> DeadBeef {
@@ -159,14 +158,12 @@ impl DeadBeef {
         unsafe { &*self.ptr }
     }
 
-    pub fn sendmessage(msg: u32, ctx: usize,  p1: u32, p2: u32 ) -> i32{
+    pub fn sendmessage(msg: u32, ctx: usize, p1: u32, p2: u32) -> i32 {
         let deadbeef = unsafe { DeadBeef::deadbeef() };
 
         let sendmessage = deadbeef.get().sendmessage.unwrap();
 
-        unsafe {
-            sendmessage(msg, ctx, p1, p2)
-        }
+        unsafe { sendmessage(msg, ctx, p1, p2) }
     }
 
     pub fn log_detailed(layers: u32, msg: &str) {
@@ -182,10 +179,8 @@ impl DeadBeef {
         let deadbeef = unsafe { DeadBeef::deadbeef() };
 
         let streamer_read = deadbeef.get().streamer_read.unwrap();
-        
-        unsafe {
-            streamer_read(buf.as_mut_ptr(), buf.capacity().try_into().unwrap())
-        }
+
+        unsafe { streamer_read(buf.as_mut_ptr(), buf.capacity().try_into().unwrap()) }
     }
 }
 
@@ -214,9 +209,11 @@ macro_rules! lit_cstr {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(api: *mut DB_functions_t ) -> *mut DB_output_s {
+pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
+    api: *mut DB_functions_t,
+) -> *mut DB_output_s {
     println!("rust: plugin_load");
-    
+
     DEADBEEF = Some(DeadBeef::init_from_ptr(api));
 
     let x = DB_output_t {
@@ -256,8 +253,8 @@ pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(api: *mut DB_functions_t )
             configdialog: std::ptr::null(),
             reserved1: 0,
             reserved2: 0,
-            reserved3: 0
-        }
+            reserved3: 0,
+        },
     };
 
     /*
