@@ -4,12 +4,14 @@
 #![deny(elided_lifetimes_in_paths)]
 
 use std::ffi::{c_char, c_int, c_void, CString};
+
 use std::{rc::Rc, sync::Mutex};
+use std::thread;
 
 use pipewire::{
-    prelude::ReadableDict,
-    registry::{GlobalObject, Registry},
-    Context, MainLoop,
+    prelude::*,
+    properties,
+    Context, MainLoop, stream,
 };
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
@@ -21,6 +23,79 @@ static mut DEADBEEF: Option<DeadBeef> = None;
 static mut DEADBEEF_THREAD_ID: Option<std::thread::ThreadId> = None;
 
 static state: Mutex<ddb_playback_state_e> = Mutex::new(DDB_PLAYBACK_STATE_STOPPED);
+
+#[derive(Debug)]
+pub enum PwThreadMessage {
+    Terminate,
+}
+
+static RESULT_SENDER: Mutex<Option<pipewire::channel::Sender<PwThreadMessage>>> = Mutex::new(None);
+
+pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>) {
+
+    let mainloop = MainLoop::new().expect("Failed to create mainloop");
+
+     // When we receive a `Terminate` message, quit the main loop.
+     let _receiver = pw_receiver.attach(&mainloop, {
+         let mainloop = mainloop.clone();
+         move |_| mainloop.quit()
+     });
+
+    let stream = pipewire::stream::Stream::<i32>::with_user_data(
+        &mainloop,
+        "deadbeef",
+        properties! {
+            *pipewire::keys::MEDIA_TYPE => "Audio",
+            *pipewire::keys::MEDIA_CATEGORY => "Playback",
+            *pipewire::keys::MEDIA_ROLE => "Music",
+            *pipewire::keys::NODE_NAME => "DeadBeef [rust]",
+            *pipewire::keys::APP_NAME => "DeadBeef [rust]",
+            *pipewire::keys::APP_ID => "music.player.deadbeef",
+        },0
+    )
+    .state_changed(|old, new| {
+        println!("State changed: {:?} -> {:?}", old, new);
+    })
+    .process(move |stream, _user_data| {
+        println!("On frame");
+        match stream.dequeue_buffer() {
+            None => println!("No buffer received"),
+            Some(mut buffer) => {
+                let datas = buffer.datas_mut();
+                println!("Frame {}. Got {} datas.", _user_data, datas.len());
+                *_user_data += 1;
+
+                let d = datas[0].get_mut();
+
+                let bytesread = if DeadBeef::streamer_ok_to_read(-1) > 0 {
+                    DeadBeef::streamer_read(d.as_mut_ptr() as *mut c_void, 4096)
+                } else {
+                    0
+                };
+
+                *datas[0].chunk().size_mut() = bytesread as u32;
+                *datas[0].chunk().offset_mut() = 1;
+                *datas[0].chunk().stride_mut() = 1;
+            }
+        };
+
+    })
+    .create().expect("Error creating stream!");
+
+
+    stream.connect(pipewire::spa::Direction::Output, None, 
+        stream::StreamFlags::AUTOCONNECT|stream::StreamFlags::MAP_BUFFERS|stream::StreamFlags::RT_PROCESS|stream::StreamFlags::DRIVER,
+        &mut [],
+    ).expect("Error connecting stream!");
+
+    *state.lock().unwrap() = DDB_PLAYBACK_STATE_PLAYING;
+
+    mainloop.run();
+
+    *RESULT_SENDER.lock().unwrap() = None;
+
+}
+
 
 pub extern "C" fn init() -> c_int {
     *state.lock().unwrap() = DDB_PLAYBACK_STATE_STOPPED;
@@ -38,11 +113,25 @@ pub extern "C" fn setformat(_fmt: *mut ddb_waveformat_t) -> c_int {
 }
 
 pub extern "C" fn play() -> c_int {
+
+    let (pw_sender, pw_receiver) = pipewire::channel::channel();
+
+    *RESULT_SENDER.lock().unwrap() = Some(pw_sender);
+
+    let _pw_thread =
+    thread::spawn(||pw_thread_main(pw_receiver));
+
     *state.lock().unwrap() = DDB_PLAYBACK_STATE_PLAYING;
+
     0
 }
 
 pub extern "C" fn stop() -> c_int {
+    if let Ok(sendermtx) = RESULT_SENDER.lock() {
+        if let Some(sender) = sendermtx.as_ref() {
+            sender.send(PwThreadMessage::Terminate).expect("Cannot send message!");
+        }
+    }
     *state.lock().unwrap() = DDB_PLAYBACK_STATE_STOPPED;
     0
 }
@@ -110,7 +199,7 @@ pub extern "C" fn enum_soundcards(
 
     let _corelistener = core
         .add_listener_local()
-        .done(move |id, seq| _ml.upgrade().unwrap().quit())
+        .done(move |_id, _seq| _ml.upgrade().unwrap().quit())
         .register();
 
     core.sync(0).expect("Error sync");
@@ -118,6 +207,7 @@ pub extern "C" fn enum_soundcards(
     mainloop.run();
 }
 
+#[allow(unused)]
 pub unsafe extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_int {
     match msgid {
         DB_EV_SONGSTARTED => println!("rust: song started"),
@@ -129,11 +219,11 @@ pub unsafe extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_
 
 /// Main DeadBeef struct that encapsulates common DeadBeef API functions.
 pub struct DeadBeef {
-    pub(crate) ptr: *mut DB_functions_t,
+    pub(crate) ptr: *const DB_functions_t,
 }
 
 impl DeadBeef {
-    pub unsafe fn init_from_ptr(ptr: *mut DB_functions_t) -> DeadBeef {
+    pub unsafe fn init_from_ptr(ptr: *const DB_functions_t) -> DeadBeef {
         assert!(!ptr.is_null());
 
         DEADBEEF = Some(DeadBeef { ptr });
@@ -171,12 +261,21 @@ impl DeadBeef {
         }
     }
 
-    pub fn streamer_read(buf: &mut Vec<i8>) -> i32 {
+    pub fn streamer_read(buf: *mut c_void, len: usize) -> i32 {
         let deadbeef = unsafe { DeadBeef::deadbeef() };
 
         let streamer_read = deadbeef.get().streamer_read.unwrap();
 
-        unsafe { streamer_read(buf.as_mut_ptr(), buf.capacity().try_into().unwrap()) }
+        unsafe { streamer_read(buf as *mut i8 , len as i32) }
+    }
+
+    pub fn streamer_ok_to_read(len: i32) -> i32 {
+        let deadbeef = unsafe { DeadBeef::deadbeef() };
+
+        let streamer_ok_to_read = deadbeef.get().streamer_ok_to_read.unwrap();
+
+        unsafe { streamer_ok_to_read(len as i32) }
+
     }
 }
 
@@ -206,7 +305,7 @@ macro_rules! lit_cstr {
 
 #[no_mangle]
 pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
-    api: *mut DB_functions_t,
+    api: *const DB_functions_t,
 ) -> *mut DB_output_s {
 
     DEADBEEF = Some(DeadBeef::init_from_ptr(api));
