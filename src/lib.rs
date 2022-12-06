@@ -107,7 +107,7 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
     };
 
     stream.connect(pipewire::spa::Direction::Output, None, 
-        stream::StreamFlags::AUTOCONNECT|stream::StreamFlags::MAP_BUFFERS|stream::StreamFlags::RT_PROCESS|stream::StreamFlags::DRIVER,
+        stream::StreamFlags::AUTOCONNECT|stream::StreamFlags::MAP_BUFFERS|stream::StreamFlags::RT_PROCESS,
         &mut [r],
     ).expect("Error connecting stream!");
 
