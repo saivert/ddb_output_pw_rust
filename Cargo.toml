@@ -10,6 +10,9 @@ crate-type = ["cdylib"]
 [dependencies]
 const-str = "0.5.3"
 pipewire = "0.5.0"
+cpp = "0.5"
+libspa-sys = "0.5.0"
 
 [build-dependencies]
 bindgen = "0.63.0"
+cpp_build = "0.5"
