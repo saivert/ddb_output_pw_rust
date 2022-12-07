@@ -4,6 +4,8 @@
 #![deny(elided_lifetimes_in_paths)]
 
 
+mod plugin;
+
 use cpp::cpp;
 
 cpp!{{
@@ -28,7 +30,6 @@ use pipewire::{
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 static mut PLUGIN: Option<DB_output_t> = None;
-static mut _plugin_ptr: *mut DB_output_t = std::ptr::null_mut();
 
 static mut DEADBEEF: Option<DeadBeef> = None;
 static mut DEADBEEF_THREAD_ID: Option<std::thread::ThreadId> = None;
@@ -171,6 +172,7 @@ fn msgtopwthread(msg: PwThreadMessage) {
 
 pub extern "C" fn stop() -> c_int {
     msgtopwthread(PwThreadMessage::Terminate);
+    RESULT_SENDER.lock().unwrap().take();
     *state.lock().unwrap() = DDB_PLAYBACK_STATE_STOPPED;
     0
 }
@@ -270,16 +272,17 @@ pub unsafe extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_
 /// Main DeadBeef struct that encapsulates common DeadBeef API functions.
 pub struct DeadBeef {
     pub(crate) ptr: *const DB_functions_t,
+    pub(crate) plugin_ptr: *mut DB_output_t,
 }
 
 impl DeadBeef {
-    pub unsafe fn init_from_ptr(ptr: *const DB_functions_t) -> DeadBeef {
-        assert!(!ptr.is_null());
+    pub unsafe fn init_from_ptr(api: *const DB_functions_t, plugin: *mut DB_output_t) -> DeadBeef {
+        assert!(!api.is_null());
 
-        DEADBEEF = Some(DeadBeef { ptr });
+        DEADBEEF = Some(DeadBeef { ptr: api, plugin_ptr: plugin });
         DEADBEEF_THREAD_ID = Some(std::thread::current().id());
 
-        DeadBeef { ptr }
+        DeadBeef { ptr: api, plugin_ptr: plugin }
     }
 
     pub unsafe fn deadbeef() -> &'static mut DeadBeef {
@@ -307,7 +310,7 @@ impl DeadBeef {
         let log_detailed = deadbeef.get().log_detailed.unwrap();
         let msg = LossyCString::new(msg);
         unsafe {
-            log_detailed(_plugin_ptr as *mut DB_plugin_t, layers, msg.as_ptr());
+            log_detailed(deadbeef.plugin_ptr as *mut DB_plugin_t, layers, msg.as_ptr());
         }
     }
 
@@ -353,7 +356,6 @@ pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
     api: *const DB_functions_t,
 ) -> *mut DB_output_s {
 
-    DEADBEEF = Some(DeadBeef::init_from_ptr(api));
 
     let mut x = DB_output_t {
         init: Some(init),
@@ -406,7 +408,9 @@ pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
 
     PLUGIN = Some(x);
 
-    _plugin_ptr = PLUGIN.as_mut().unwrap();
+    let plugin_ptr: *mut DB_output_t = PLUGIN.as_mut().unwrap();
 
-    _plugin_ptr
+    DEADBEEF = Some(DeadBeef::init_from_ptr(api, plugin_ptr));
+
+    plugin_ptr
 }
