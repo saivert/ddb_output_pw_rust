@@ -241,7 +241,7 @@ pub extern "C" fn enum_soundcards(
     let mainloop_clone = mainloop.clone();
     let done_clone = done.clone();
 
-    let _ = core
+    let _core = core
         .add_listener_local()
         .done(move |id, seq| {
             if id == PW_ID_CORE && seq == pending {
