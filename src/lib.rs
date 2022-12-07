@@ -2,7 +2,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![deny(elided_lifetimes_in_paths)]
-extern crate libspa_sys;
+
 
 use cpp::cpp;
 
@@ -21,7 +21,7 @@ use std::thread;
 use pipewire::{
     prelude::*,
     properties,
-    Context, MainLoop, stream,
+    Context, MainLoop, stream, PW_ID_CORE,
 };
 
 
@@ -209,8 +209,8 @@ pub extern "C" fn enum_soundcards(
     >,
     userdata: *mut c_void,
 ) {
-    let mainloop = Rc::new(MainLoop::new().expect("Failed to create mainloop"));
-    let context = Context::new(mainloop.as_ref()).expect("Failed to create context");
+    let mainloop = MainLoop::new().expect("Failed to create mainloop");
+    let context = Context::new(&mainloop).expect("Failed to create context");
     let core = context.connect(None).expect("Failed to connect to remote");
     let registry = core.get_registry().expect("Failed to get registry");
 
@@ -236,17 +236,25 @@ pub extern "C" fn enum_soundcards(
         })
         .register();
 
-    let _corelistener = core
+    let done = Rc::new(std::cell::Cell::new(false));
+    let pending = core.sync(0).expect("Error sync");
+    let mainloop_clone = mainloop.clone();
+    let done_clone = done.clone();
+
+    let _ = core
         .add_listener_local()
-        .done({
-            let mainloop = mainloop.clone();
-            move |_id, _seq| mainloop.quit()
+        .done(move |id, seq| {
+            if id == PW_ID_CORE && seq == pending {
+                done_clone.set(true);
+                mainloop_clone.quit()
+            }
         })
         .register();
 
-    core.sync(0).expect("Error sync");
-
-    mainloop.run();
+    while !done.get() {
+        mainloop.run();
+    }
+    
 }
 
 #[allow(unused)]
