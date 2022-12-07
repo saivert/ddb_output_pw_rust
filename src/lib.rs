@@ -333,11 +333,6 @@ impl LossyCString {
     }
 }
 
-static plugin_id: &'static str = "pipewirerust\0";
-static plugin_name: &'static str = "Pipewire output plugin written in Rust\0";
-static plugin_desc: &'static str = "This is a new Pipewire based plugin written in rust\0";
-static plugin_copyright: &'static str = "Some copyright\0";
-static plugin_website: &'static str = "http://saivert.com\0";
 
 macro_rules! lit_cstr {
     ($s:literal) => {
@@ -373,11 +368,11 @@ pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
             version_minor: 1,
             flags: DDB_PLUGIN_FLAG_LOGGING,
             type_: DB_PLUGIN_OUTPUT as i32,
-            id: plugin_id.as_ptr() as *const c_char,
-            name: plugin_name.as_ptr() as *const c_char,
-            descr: plugin_desc.as_ptr() as *const c_char,
-            copyright: plugin_copyright.as_ptr() as *const c_char,
-            website: const_str::raw_cstr!("www.saivert.com"),
+            id: lit_cstr!("pipewirerust"),
+            name: lit_cstr!("Pipewire output plugin written in Rust"),
+            descr: lit_cstr!("This is a new Pipewire based plugin written in rust"),
+            copyright: lit_cstr!("Some copyright"),
+            website: lit_cstr!("https://saivert.com"),
             start: Some(plugin_start),
             stop: Some(plugin_stop),
             message: Some(message),
