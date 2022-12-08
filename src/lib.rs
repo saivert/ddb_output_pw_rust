@@ -4,8 +4,6 @@
 #![deny(elided_lifetimes_in_paths)]
 
 
-mod plugin;
-
 use cpp::cpp;
 
 cpp!{{
@@ -15,7 +13,7 @@ cpp!{{
 
 }}
 
-use std::ffi::{c_char, c_int, c_void, CString};
+use std::ffi::{c_char, c_int, c_void};
 
 use std::{rc::Rc, sync::Mutex};
 use std::thread;
@@ -26,8 +24,13 @@ use pipewire::{
     Context, MainLoop, stream, PW_ID_CORE,
 };
 
+mod dbapi;
+use dbapi::*;
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+#[macro_use]
+mod utils;
+use utils::LossyCString;
+
 
 static mut PLUGIN: Option<DB_output_t> = None;
 
@@ -269,87 +272,6 @@ pub unsafe extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_
     0
 }
 
-/// Main DeadBeef struct that encapsulates common DeadBeef API functions.
-pub struct DeadBeef {
-    pub(crate) ptr: *const DB_functions_t,
-    pub(crate) plugin_ptr: *mut DB_output_t,
-}
-
-impl DeadBeef {
-    pub unsafe fn init_from_ptr(api: *const DB_functions_t, plugin: *mut DB_output_t) -> DeadBeef {
-        assert!(!api.is_null());
-
-        DEADBEEF = Some(DeadBeef { ptr: api, plugin_ptr: plugin });
-        DEADBEEF_THREAD_ID = Some(std::thread::current().id());
-
-        DeadBeef { ptr: api, plugin_ptr: plugin }
-    }
-
-    pub unsafe fn deadbeef() -> &'static mut DeadBeef {
-        match DEADBEEF {
-            Some(ref mut w) => w,
-            None => panic!("Plugin wasn't initialized correctly"),
-        }
-    }
-
-    #[inline]
-    pub(crate) fn get(&self) -> &DB_functions_t {
-        unsafe { &*self.ptr }
-    }
-
-    pub fn sendmessage(msg: u32, ctx: usize, p1: u32, p2: u32) -> i32 {
-        let deadbeef = unsafe { DeadBeef::deadbeef() };
-
-        let sendmessage = deadbeef.get().sendmessage.unwrap();
-
-        unsafe { sendmessage(msg, ctx, p1, p2) }
-    }
-
-    pub fn log_detailed(layers: u32, msg: &str) {
-        let deadbeef = unsafe { DeadBeef::deadbeef() };
-        let log_detailed = deadbeef.get().log_detailed.unwrap();
-        let msg = LossyCString::new(msg);
-        unsafe {
-            log_detailed(deadbeef.plugin_ptr as *mut DB_plugin_t, layers, msg.as_ptr());
-        }
-    }
-
-    pub fn streamer_read(buf: *mut c_void, len: usize) -> i32 {
-        let deadbeef = unsafe { DeadBeef::deadbeef() };
-
-        let streamer_read = deadbeef.get().streamer_read.unwrap();
-
-        unsafe { streamer_read(buf as *mut i8 , len as i32) }
-    }
-
-    pub fn streamer_ok_to_read(len: i32) -> i32 {
-        let deadbeef = unsafe { DeadBeef::deadbeef() };
-
-        let streamer_ok_to_read = deadbeef.get().streamer_ok_to_read.unwrap();
-
-        unsafe { streamer_ok_to_read(len as i32) }
-
-    }
-}
-
-pub(crate) struct LossyCString;
-
-impl LossyCString {
-    #[allow(clippy::new_ret_no_self)]
-    pub(crate) fn new<T: AsRef<str>>(t: T) -> CString {
-        match CString::new(t.as_ref()) {
-            Ok(cstr) => cstr,
-            Err(_) => CString::new(t.as_ref().replace('\0', "")).expect("string has no nulls"),
-        }
-    }
-}
-
-
-macro_rules! lit_cstr {
-    ($s:literal) => {
-        (concat!($s, "\0").as_bytes().as_ptr() as *const c_char)
-    };
-}
 
 #[no_mangle]
 pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
