@@ -1,6 +1,6 @@
 use cpp::cpp;
 
-cpp!{{
+cpp! {{
     #include <spa/param/audio/format-utils.h>
     #include <spa/param/props.h>
     #include <pipewire/pipewire.h>
@@ -9,14 +9,10 @@ cpp!{{
 
 use std::ffi::{c_char, c_int, c_void};
 
-use std::{rc::Rc, sync::Mutex};
 use std::thread;
+use std::{rc::Rc, sync::Mutex};
 
-use pipewire::{
-    prelude::*,
-    properties,
-    Context, MainLoop, stream, PW_ID_CORE,
-};
+use pipewire::{prelude::*, properties, stream, Context, MainLoop, PW_ID_CORE};
 
 mod dbapi;
 use dbapi::*;
@@ -24,7 +20,6 @@ use dbapi::*;
 #[macro_use]
 mod utils;
 use utils::LossyCString;
-
 
 static mut PLUGIN: Option<DB_output_t> = None;
 
@@ -37,16 +32,13 @@ static STATE: Mutex<ddb_playback_state_e> = Mutex::new(DDB_PLAYBACK_STATE_STOPPE
 pub enum PwThreadMessage {
     Terminate,
     Pause,
-    Unpause
+    Unpause,
 }
 
 static RESULT_SENDER: Mutex<Option<pipewire::channel::Sender<PwThreadMessage>>> = Mutex::new(None);
 
 pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>) {
-
     let mainloop = MainLoop::new().expect("Failed to create mainloop");
-
-
 
     let stream = pipewire::stream::Stream::<i32>::with_user_data(
         &mainloop,
@@ -58,7 +50,8 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
             *pipewire::keys::NODE_NAME => "DeadBeef [rust]",
             *pipewire::keys::APP_NAME => "DeadBeef [rust]",
             *pipewire::keys::APP_ID => "music.player.deadbeef",
-        },0
+        },
+        0,
     )
     .state_changed(|old, new| {
         println!("State changed: {:?} -> {:?}", old, new);
@@ -78,16 +71,16 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
                     DeadBeef::streamer_read(d.as_mut_ptr() as *mut c_void, 4096)
                 } else {
                     0
-                }; 
+                };
 
                 *datas[0].chunk().size_mut() = bytesread as u32;
                 *datas[0].chunk().offset_mut() = 0;
                 *datas[0].chunk().stride_mut() = 1;
             }
         };
-
     })
-    .create().expect("Error creating stream!");
+    .create()
+    .expect("Error creating stream!");
 
     // Until pipewire-rs get bindings for POD building we have to cheat and use C++ for this
     let r: *mut libspa_sys::spa_pod = unsafe {
@@ -95,7 +88,7 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
             uint8_t buffer[1024];
 
             struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
-        
+
             struct spa_audio_info_raw rawinfo = {};
             rawinfo.format =  SPA_AUDIO_FORMAT_S16_LE;
             rawinfo.channels = 2;
@@ -104,31 +97,35 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
         })
     };
 
-    stream.connect(pipewire::spa::Direction::Output, None, 
-        stream::StreamFlags::AUTOCONNECT|stream::StreamFlags::MAP_BUFFERS|stream::StreamFlags::RT_PROCESS,
-        &mut [r],
-    ).expect("Error connecting stream!");
+    stream
+        .connect(
+            pipewire::spa::Direction::Output,
+            None,
+            stream::StreamFlags::AUTOCONNECT
+                | stream::StreamFlags::MAP_BUFFERS
+                | stream::StreamFlags::RT_PROCESS,
+            &mut [r],
+        )
+        .expect("Error connecting stream!");
 
     *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_PLAYING;
 
-     // When we receive a `Terminate` message, quit the main loop.
-     let _receiver = pw_receiver.attach(&mainloop, {
+    // When we receive a `Terminate` message, quit the main loop.
+    let _receiver = pw_receiver.attach(&mainloop, {
         let mainloop = mainloop.clone();
         move |msg| {
-           match msg {
-               PwThreadMessage::Terminate => mainloop.quit(),
-               PwThreadMessage::Pause => stream.set_active(false).unwrap(),
-               PwThreadMessage::Unpause => stream.set_active(true).unwrap(),
-           };
+            match msg {
+                PwThreadMessage::Terminate => mainloop.quit(),
+                PwThreadMessage::Pause => stream.set_active(false).unwrap(),
+                PwThreadMessage::Unpause => stream.set_active(true).unwrap(),
+            };
         }
     });
 
     mainloop.run();
 
     *RESULT_SENDER.lock().unwrap() = None;
-
 }
-
 
 pub extern "C" fn init() -> c_int {
     *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_STOPPED;
@@ -146,13 +143,11 @@ pub extern "C" fn setformat(_fmt: *mut ddb_waveformat_t) -> c_int {
 }
 
 pub extern "C" fn play() -> c_int {
-
     let (pw_sender, pw_receiver) = pipewire::channel::channel();
 
     *RESULT_SENDER.lock().unwrap() = Some(pw_sender);
 
-    let _pw_thread =
-    thread::spawn(||pw_thread_main(pw_receiver));
+    let _pw_thread = thread::spawn(|| pw_thread_main(pw_receiver));
 
     *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_PLAYING;
 
@@ -226,7 +221,7 @@ pub extern "C" fn enum_soundcards(
                         let n = LossyCString::new(props.get("node.name").unwrap_or(""));
                         let d = LossyCString::new(props.get("node.description").unwrap_or(""));
 
-                        if n.as_bytes().len() > 0 {
+                        if !n.as_bytes().is_empty() {
                             callback.unwrap()(n.as_ptr(), d.as_ptr(), userdata);
                         }
                     }
@@ -253,11 +248,10 @@ pub extern "C" fn enum_soundcards(
     while !done.get() {
         mainloop.run();
     }
-    
 }
 
 #[allow(unused)]
-pub unsafe extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_int {
+pub extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_int {
     match msgid {
         DB_EV_SONGSTARTED => println!("rust: song started"),
         _ => return 0,
@@ -266,13 +260,13 @@ pub unsafe extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_
     0
 }
 
-
 #[no_mangle]
+///
+/// # Safety
+/// This is requires since this is a plugin export function
 pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
     api: *const DB_functions_t,
 ) -> *mut DB_output_s {
-
-
     let mut x = DB_output_t {
         init: Some(init),
         free: Some(free),
