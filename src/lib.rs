@@ -1,9 +1,3 @@
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-#![deny(elided_lifetimes_in_paths)]
-
-
 use cpp::cpp;
 
 cpp!{{
@@ -37,7 +31,7 @@ static mut PLUGIN: Option<DB_output_t> = None;
 static mut DEADBEEF: Option<DeadBeef> = None;
 static mut DEADBEEF_THREAD_ID: Option<std::thread::ThreadId> = None;
 
-static state: Mutex<ddb_playback_state_e> = Mutex::new(DDB_PLAYBACK_STATE_STOPPED);
+static STATE: Mutex<ddb_playback_state_e> = Mutex::new(DDB_PLAYBACK_STATE_STOPPED);
 
 #[derive(Debug)]
 pub enum PwThreadMessage {
@@ -115,7 +109,7 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
         &mut [r],
     ).expect("Error connecting stream!");
 
-    *state.lock().unwrap() = DDB_PLAYBACK_STATE_PLAYING;
+    *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_PLAYING;
 
      // When we receive a `Terminate` message, quit the main loop.
      let _receiver = pw_receiver.attach(&mainloop, {
@@ -137,13 +131,13 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
 
 
 pub extern "C" fn init() -> c_int {
-    *state.lock().unwrap() = DDB_PLAYBACK_STATE_STOPPED;
+    *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_STOPPED;
 
     0
 }
 
 pub extern "C" fn free() -> c_int {
-    *state.lock().unwrap() = DDB_PLAYBACK_STATE_STOPPED;
+    *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_STOPPED;
     0
 }
 
@@ -160,7 +154,7 @@ pub extern "C" fn play() -> c_int {
     let _pw_thread =
     thread::spawn(||pw_thread_main(pw_receiver));
 
-    *state.lock().unwrap() = DDB_PLAYBACK_STATE_PLAYING;
+    *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_PLAYING;
 
     0
 }
@@ -176,24 +170,24 @@ fn msgtopwthread(msg: PwThreadMessage) {
 pub extern "C" fn stop() -> c_int {
     msgtopwthread(PwThreadMessage::Terminate);
     RESULT_SENDER.lock().unwrap().take();
-    *state.lock().unwrap() = DDB_PLAYBACK_STATE_STOPPED;
+    *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_STOPPED;
     0
 }
 
 pub extern "C" fn pause() -> c_int {
     msgtopwthread(PwThreadMessage::Pause);
-    *state.lock().unwrap() = DDB_PLAYBACK_STATE_PAUSED;
+    *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_PAUSED;
     0
 }
 
 pub extern "C" fn unpause() -> c_int {
     msgtopwthread(PwThreadMessage::Unpause);
-    *state.lock().unwrap() = DDB_PLAYBACK_STATE_PLAYING;
+    *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_PLAYING;
     0
 }
 
 pub extern "C" fn getstate() -> ddb_playback_state_t {
-    *state.lock().unwrap()
+    *STATE.lock().unwrap()
 }
 
 pub extern "C" fn plugin_start() -> c_int {
