@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 
 #![allow(dead_code)]
-
+#![allow(clippy::all)]
 use crate::{DEADBEEF, DEADBEEF_THREAD_ID, utils::LossyCString};
 use std::ffi::c_void;
 
