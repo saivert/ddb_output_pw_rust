@@ -42,8 +42,6 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
 
     let device = DeadBeef::conf_get_str("pipewirerust_soundcard", "default");
 
-    println!("Picked card {device}");
-
     let mut props = properties! {
         *pipewire::keys::MEDIA_TYPE => "Audio",
         *pipewire::keys::MEDIA_TYPE => "Audio",
@@ -55,7 +53,7 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
     };
 
     if !device.eq("default") {
-        props.insert(pipewire::keys::NODE_TARGET.as_bytes().to_vec(), device.as_bytes().to_vec());
+        props.insert(*pipewire::keys::NODE_TARGET, &device);
     }
 
     let stream = pipewire::stream::Stream::<i32>::with_user_data(
