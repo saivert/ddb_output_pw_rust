@@ -33,9 +33,23 @@ pub enum PwThreadMessage {
     Terminate,
     Pause,
     Unpause,
+    SetFmt{format: u32, channels: u32, rate: u32},
 }
 
 static RESULT_SENDER: Mutex<Option<pipewire::channel::Sender<PwThreadMessage>>> = Mutex::new(None);
+
+pub fn db_format_to_pipewire(input: ddb_waveformat_t) -> u32 {
+    match input.bps {
+        8 => libspa_sys::spa_audio_format_SPA_AUDIO_FORMAT_S8,
+        16 => libspa_sys::spa_audio_format_SPA_AUDIO_FORMAT_S16_LE,
+        24 => libspa_sys::spa_audio_format_SPA_AUDIO_FORMAT_S24_LE,
+        32 => match input.is_float == 1 {
+            true => libspa_sys::spa_audio_format_SPA_AUDIO_FORMAT_F32_LE,
+            false => libspa_sys::spa_audio_format_SPA_AUDIO_FORMAT_S32_LE,
+        },
+        _ => libspa_sys::spa_audio_format_SPA_AUDIO_FORMAT_UNKNOWN,
+    }
+}
 
 pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>) {
     let mainloop = MainLoop::new().expect("Failed to create mainloop");
@@ -93,15 +107,19 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
 
     // Until pipewire-rs get bindings for POD building we have to cheat and use C++ for this
     let r: *mut libspa_sys::spa_pod = unsafe {
-        cpp!([] -> *mut libspa_sys::spa_pod as "spa_pod *" {
+        let fmt = PLUGIN.unwrap().fmt;
+        let format = db_format_to_pipewire(fmt);
+        let channels = fmt.channels;
+        let rate = fmt.samplerate;
+        cpp!([format as "int", channels as "int", rate as "int"] -> *mut libspa_sys::spa_pod as "spa_pod *" {
             uint8_t buffer[1024];
 
             struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
 
             struct spa_audio_info_raw rawinfo = {};
-            rawinfo.format =  SPA_AUDIO_FORMAT_S16_LE;
-            rawinfo.channels = 2;
-            rawinfo.rate = 48000;
+            rawinfo.format = (enum spa_audio_format) format;
+            rawinfo.channels = channels;
+            rawinfo.rate = rate;
             return spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &rawinfo);
         })
     };
@@ -127,6 +145,39 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
                 PwThreadMessage::Terminate => mainloop.quit(),
                 PwThreadMessage::Pause => stream.set_active(false).unwrap(),
                 PwThreadMessage::Unpause => stream.set_active(true).unwrap(),
+                PwThreadMessage::SetFmt { format, channels, rate } => {
+                    if stream.disconnect().is_ok() {
+
+                        println!("Set format called with: Format = {format}, Channels = {channels}, rate = {rate}");
+
+                        let new_format: *mut libspa_sys::spa_pod = unsafe {
+                            cpp!([format as "int", channels as "int", rate as "int"] -> *mut libspa_sys::spa_pod as "spa_pod *" {
+                                uint8_t buffer[1024];
+
+                                struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
+                    
+                                struct spa_audio_info_raw rawinfo = {};
+                                rawinfo.format = (enum spa_audio_format)format;
+                                rawinfo.channels = channels;
+                                rawinfo.rate = rate;
+                                return spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &rawinfo);
+                            })
+                        };
+
+                        stream
+                        .connect(
+                            pipewire::spa::Direction::Output,
+                            None,
+                            stream::StreamFlags::AUTOCONNECT
+                                | stream::StreamFlags::MAP_BUFFERS
+                                | stream::StreamFlags::RT_PROCESS,
+                            &mut [new_format],
+                        )
+                        .expect("Error connecting stream!");
+
+
+                    }
+                }
             };
         }
     });
@@ -147,7 +198,14 @@ pub extern "C" fn free() -> c_int {
     0
 }
 
-pub extern "C" fn setformat(_fmt: *mut ddb_waveformat_t) -> c_int {
+pub extern "C" fn setformat(fmt: *mut ddb_waveformat_t) -> c_int {
+    /* Not working right yet... causes garbled audio and crashes sometimes.
+    unsafe {
+        let pwfmt = db_format_to_pipewire(*fmt);
+        PLUGIN.unwrap().fmt = *fmt;
+        msgtopwthread(PwThreadMessage::SetFmt { format: pwfmt, channels: (*fmt).channels as u32, rate: (*fmt).samplerate as u32 });
+    }
+    */
     0
 }
 
