@@ -40,17 +40,28 @@ static RESULT_SENDER: Mutex<Option<pipewire::channel::Sender<PwThreadMessage>>> 
 pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>) {
     let mainloop = MainLoop::new().expect("Failed to create mainloop");
 
+    let device = DeadBeef::conf_get_str("pipewirerust_soundcard", "default");
+
+    println!("Picked card {device}");
+
+    let mut props = properties! {
+        *pipewire::keys::MEDIA_TYPE => "Audio",
+        *pipewire::keys::MEDIA_TYPE => "Audio",
+        *pipewire::keys::MEDIA_CATEGORY => "Playback",
+        *pipewire::keys::MEDIA_ROLE => "Music",
+        *pipewire::keys::NODE_NAME => "DeadBeef [rust]",
+        *pipewire::keys::APP_NAME => "DeadBeef [rust]",
+        *pipewire::keys::APP_ID => "music.player.deadbeef",
+    };
+
+    if !device.eq("default") {
+        props.insert(pipewire::keys::NODE_TARGET.as_bytes().to_vec(), device.as_bytes().to_vec());
+    }
+
     let stream = pipewire::stream::Stream::<i32>::with_user_data(
         &mainloop,
         "deadbeef",
-        properties! {
-            *pipewire::keys::MEDIA_TYPE => "Audio",
-            *pipewire::keys::MEDIA_CATEGORY => "Playback",
-            *pipewire::keys::MEDIA_ROLE => "Music",
-            *pipewire::keys::NODE_NAME => "DeadBeef [rust]",
-            *pipewire::keys::APP_NAME => "DeadBeef [rust]",
-            *pipewire::keys::APP_ID => "music.player.deadbeef",
-        },
+        props,
         0,
     )
     .state_changed(|old, new| {

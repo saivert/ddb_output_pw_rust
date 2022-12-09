@@ -70,4 +70,18 @@ impl DeadBeef {
         unsafe { streamer_ok_to_read(len as i32) }
 
     }
+
+    pub fn conf_get_str(item: impl Into<String>, default: impl Into<String>) -> String {
+        let deadbeef = unsafe { DeadBeef::deadbeef() };
+
+        let item = LossyCString::new(item.into());
+        let default = LossyCString::new(default.into());
+        let conf_get_str = deadbeef.get().conf_get_str.unwrap();
+        let mut buf: Vec<u8> = vec![0; 4096];
+
+        unsafe { conf_get_str(item.as_ptr(), default.as_ptr(), buf.as_mut_ptr() as *mut i8, 4096); }
+
+        String::from_utf8_lossy(&buf).trim_end_matches(char::from(0)).to_string()
+    }
+
 }
