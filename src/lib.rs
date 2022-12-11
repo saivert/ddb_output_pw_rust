@@ -98,14 +98,10 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
         println!("State changed: {:?} -> {:?}", old, new);
     })
     .process(move |stream, _user_data| {
-        println!("On frame");
         match stream.dequeue_buffer() {
             None => println!("No buffer received"),
             Some(mut buffer) => {
                 let datas = buffer.datas_mut();
-                println!("Frame {}. Got {} datas.", _user_data, datas.len());
-                *_user_data += 1;
-
                 let d = datas[0].get_mut();
 
                 let bytesread = if DeadBeef::streamer_ok_to_read(-1) > 0 {
