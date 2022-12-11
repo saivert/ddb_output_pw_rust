@@ -64,6 +64,7 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
         *pipewire::keys::NODE_NAME => "DeadBeef [rust]",
         *pipewire::keys::APP_NAME => "DeadBeef [rust]",
         *pipewire::keys::APP_ID => "music.player.deadbeef",
+        "node.rate" => "1/48000",
     };
 
     if !device.eq("default") {
