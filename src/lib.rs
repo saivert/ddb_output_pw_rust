@@ -51,6 +51,23 @@ pub fn db_format_to_pipewire(input: ddb_waveformat_t) -> u32 {
     }
 }
 
+// Until pipewire-rs get bindings for POD building we have to cheat and use C++ for this
+fn create_audio_format_pod(format: u32, channels: u32, rate: u32 ) -> *mut libspa_sys::spa_pod {
+    unsafe {
+        cpp!([format as "int", channels as "int", rate as "int"] -> *mut libspa_sys::spa_pod as "spa_pod *" {
+            uint8_t buffer[1024];
+
+            struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
+
+            struct spa_audio_info_raw rawinfo = {};
+            rawinfo.format = (enum spa_audio_format)format;
+            rawinfo.channels = channels;
+            rawinfo.rate = rate;
+            return spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &rawinfo);
+        })
+    }
+}
+
 pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>) {
     let mainloop = MainLoop::new().expect("Failed to create mainloop");
 
@@ -106,23 +123,13 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
     .create()
     .expect("Error creating stream!");
 
-    // Until pipewire-rs get bindings for POD building we have to cheat and use C++ for this
-    let r: *mut libspa_sys::spa_pod = unsafe {
-        let fmt = PLUGIN.unwrap().fmt;
+    let fmtpod = {
+        let fmt = unsafe {PLUGIN.unwrap().fmt};
         let format = db_format_to_pipewire(fmt);
         let channels = fmt.channels;
         let rate = fmt.samplerate;
-        cpp!([format as "int", channels as "int", rate as "int"] -> *mut libspa_sys::spa_pod as "spa_pod *" {
-            uint8_t buffer[1024];
 
-            struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
-
-            struct spa_audio_info_raw rawinfo = {};
-            rawinfo.format = (enum spa_audio_format) format;
-            rawinfo.channels = channels;
-            rawinfo.rate = rate;
-            return spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &rawinfo);
-        })
+        create_audio_format_pod(format as u32, channels as u32, rate as u32)
     };
 
     stream
@@ -132,7 +139,7 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
             stream::StreamFlags::AUTOCONNECT
                 | stream::StreamFlags::MAP_BUFFERS
                 | stream::StreamFlags::RT_PROCESS,
-            &mut [r],
+            &mut [fmtpod],
         )
         .expect("Error connecting stream!");
 
@@ -151,19 +158,7 @@ pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>)
 
                         println!("Set format called with: Format = {format}, Channels = {channels}, rate = {rate}");
 
-                        let new_format: *mut libspa_sys::spa_pod = unsafe {
-                            cpp!([format as "int", channels as "int", rate as "int"] -> *mut libspa_sys::spa_pod as "spa_pod *" {
-                                uint8_t buffer[1024];
-
-                                struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
-                    
-                                struct spa_audio_info_raw rawinfo = {};
-                                rawinfo.format = (enum spa_audio_format)format;
-                                rawinfo.channels = channels;
-                                rawinfo.rate = rate;
-                                return spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &rawinfo);
-                            })
-                        };
+                        let new_format = create_audio_format_pod(format, channels, rate);
 
                         stream
                         .connect(
