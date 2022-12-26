@@ -238,8 +238,8 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
         *pipewire::keys::MEDIA_TYPE => "Audio",
         *pipewire::keys::MEDIA_CATEGORY => "Playback",
         *pipewire::keys::MEDIA_ROLE => "Music",
-        *pipewire::keys::NODE_NAME => "DeadBeef [rust]",
-        *pipewire::keys::APP_NAME => "DeadBeef [rust]",
+        *pipewire::keys::NODE_NAME => "DeadBeef",
+        *pipewire::keys::APP_NAME => "DeadBeef",
         *pipewire::keys::APP_ID => "music.player.deadbeef",
     };
 

@@ -186,7 +186,7 @@ pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
             flags: DDB_PLUGIN_FLAG_LOGGING,
             type_: DB_PLUGIN_OUTPUT as i32,
             id: lit_cstr!("pipewirerust"),
-            name: lit_cstr!("Pipewire output plugin written in Rust"),
+            name: lit_cstr!("Pipewire output plugin (rust)"),
             descr: lit_cstr!("This is a new Pipewire based plugin written in rust"),
             copyright: lit_cstr!(
                 "Pipewire output plugin for DeaDBeeF Player\n\
