@@ -255,25 +255,35 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
         props.insert(*pipewire::keys::NODE_TARGET, &device);
     }
 
+    let ourdisconnect = Rc::new(std::cell::Cell::new(false));
+
     let stream = pipewire::stream::Stream::<i32>::with_user_data(
         &mainloop,
         "deadbeef",
         props,
         0,
     )
-    .state_changed(|old, new| {
-        println!("State changed: {:?} -> {:?}", old, new);
-        match new {
-            pipewire::stream::StreamState::Error(x) => {
-                let msg = format!("Pipewire playback error: {x}");
-                DeadBeef::log_detailed(DDB_LOG_LAYER_DEFAULT, &msg);
-                DeadBeef::sendmessage(DB_EV_STOP, 0, 0, 0);
-            },
-            pipewire::stream::StreamState::Unconnected => {
-                DeadBeef::log_detailed(DDB_LOG_LAYER_DEFAULT, "Pipewire disconnected.");
-                DeadBeef::sendmessage(DB_EV_STOP, 0, 0, 0);
+    .state_changed({
+        let ourdisconnect = ourdisconnect.clone();
+        move |old, new| {
+            println!("State changed: {:?} -> {:?}", old, new);
+            match new {
+                pipewire::stream::StreamState::Error(x) => {
+                    let msg = format!("Pipewire playback error: {x}");
+                    DeadBeef::log_detailed(DDB_LOG_LAYER_DEFAULT, &msg);
+                    DeadBeef::sendmessage(DB_EV_STOP, 0, 0, 0);
+                },
+                pipewire::stream::StreamState::Unconnected => {
+                    if !ourdisconnect.get() {
+                        DeadBeef::log_detailed(DDB_LOG_LAYER_DEFAULT, "Pipewire disconnected.");
+                        DeadBeef::sendmessage(DB_EV_STOP, 0, 0, 0);
+                    }
+                },
+                pipewire::stream::StreamState::Connecting => {
+                    ourdisconnect.set(false);
+                }
+                _ => {}
             }
-            _ => {}
         }
     })
     .process(move |stream, _user_data| {
@@ -333,13 +343,14 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
     // When we receive a `Terminate` message, quit the main loop.
     let _receiver = pw_receiver.attach(&mainloop, {
         let mainloop = mainloop.clone();
+        let ourdisconnect = ourdisconnect.clone();
         move |msg| {
             match msg {
                 PwThreadMessage::Terminate => mainloop.quit(),
                 PwThreadMessage::Pause => stream.set_active(false).unwrap(),
                 PwThreadMessage::Unpause => stream.set_active(true).unwrap(),
                 PwThreadMessage::SetFmt { format, channels, rate } => {
-
+                    ourdisconnect.set(true);
                     if stream.disconnect().is_ok() {
 
                         println!("Set format called with: Format = {format}, Channels = {channels}, rate = {rate}");
