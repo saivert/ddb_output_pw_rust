@@ -210,7 +210,7 @@ impl OutputPlugin {
     }
 }
 
-fn create_audio_format_pod_rust(format: u32, channels: u32, rate: u32, buffer: &mut [u8]) -> *mut libspa_sys::spa_pod {
+fn create_audio_format_pod(format: u32, channels: u32, rate: u32, buffer: &mut [u8]) -> *mut libspa_sys::spa_pod {
     unsafe {
         let mut b: libspa_sys::spa_pod_builder = std::mem::zeroed();
         b.data = buffer.as_mut_ptr() as *mut c_void;
@@ -311,7 +311,7 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
         let channels = fmt.channels as u32;
         let rate = fmt.samplerate as u32;
 
-        create_audio_format_pod_rust(format, channels, rate, &mut buffer)
+        create_audio_format_pod(format, channels, rate, &mut buffer)
     };
 
     stream
@@ -340,10 +340,8 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
                         println!("Set format called with: Format = {format}, Channels = {channels}, rate = {rate}");
                         print_pipewire_format(format, channels, rate);
     
-                        // let new_format = create_audio_format_pod(format, channels, rate);
-                        // let mut buffer = [0;1024];
-                        let mut buffer = vec![0; 1024];
-                        let newformatpod: *mut libspa_sys::spa_pod = create_audio_format_pod_rust(format, channels, rate, &mut buffer);
+                        let mut buffer = [0;1024];
+                        let newformatpod: *mut libspa_sys::spa_pod = create_audio_format_pod(format, channels, rate, &mut buffer);
 
                         stream
                         .connect(
