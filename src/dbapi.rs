@@ -4,11 +4,17 @@
 
 #![allow(dead_code)]
 #![allow(clippy::all)]
-use crate::{DEADBEEF, DEADBEEF_THREAD_ID, utils::LossyCString};
+use crate::{utils::LossyCString};
 use std::ffi::c_void;
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+static mut DEADBEEF: Option<DeadBeef> = None;
+static mut DEADBEEF_THREAD_ID: Option<std::thread::ThreadId> = None;
 
+#[allow(deref_nullptr)]
+mod api {
+include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+}
+pub use api::*;
 /// Main DeadBeef struct that encapsulates common DeadBeef API functions.
 pub struct DeadBeef {
     pub(crate) ptr: *const DB_functions_t,
@@ -80,8 +86,24 @@ impl DeadBeef {
         let mut buf: Vec<u8> = vec![0; 4096];
 
         unsafe { conf_get_str(item.as_ptr(), default.as_ptr(), buf.as_mut_ptr() as *mut i8, 4096); }
-
-        String::from_utf8_lossy(&buf).trim_end_matches(char::from(0)).to_string()
+        let len = buf.iter().position(|&c| c == 0).expect("buffer overflow in conf_get_str");
+        buf.truncate(len);
+        String::from_utf8_lossy(&buf).to_string()
     }
+
+    pub fn volume_set_amp(vol: f32) {
+        let deadbeef = unsafe { DeadBeef::deadbeef() };
+        let volume_set_amp = deadbeef.get().volume_set_amp.unwrap();
+
+        unsafe { volume_set_amp(vol); }
+    }
+
+    pub fn volume_get_amp() -> f32 {
+        let deadbeef = unsafe { DeadBeef::deadbeef() };
+        let volume_get_amp = deadbeef.get().volume_get_amp.unwrap();
+
+        unsafe { volume_get_amp() }
+    }
+
 
 }

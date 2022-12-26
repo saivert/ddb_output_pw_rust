@@ -9,10 +9,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 const-str = "0.5.3"
-pipewire = "0.5.0"
-cpp = "0.5"
-libspa-sys = "0.5.0"
+pipewire = {git = "https://gitlab.freedesktop.org/saivert/pipewire-rs", branch = "format_parsing_test"}
+libspa-sys = {git = "https://gitlab.freedesktop.org/saivert/pipewire-rs", branch = "format_parsing_test"}
 
 [build-dependencies]
-bindgen = "0.63.0"
-cpp_build = "0.5"
+bindgen = {version = "0.59.0", default-features = false}

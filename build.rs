@@ -1,5 +1,5 @@
 extern crate bindgen;
-extern crate cpp_build;
+// extern crate cpp_build;
 use std::env;
 use std::path::PathBuf;
 
@@ -25,6 +25,7 @@ fn main() {
     builder = builder.header("src/wrapper.h")
                 .rustfmt_bindings(true)
                 .derive_default(true)
+                .derive_eq(true)
                 .prepend_enum_name(false);
 
     for t in INCLUDED_TYPES {
@@ -47,10 +48,10 @@ fn main() {
     bindings.write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
 
-    cpp_build::Config::new()
+/*     cpp_build::Config::new()
         .include("/usr/include/pipewire-0.3/")
         .include("/usr/include/spa-0.2/")
         .cargo_metadata(true)
-        .build("src/lib.rs");
+        .build("src/lib.rs"); */
 
 }
