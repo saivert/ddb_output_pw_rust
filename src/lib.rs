@@ -1,10 +1,5 @@
 use std::ffi::{c_char, c_int, c_void};
 
-use std::thread;
-use std::rc::Rc;
-
-use pipewire::{prelude::*, properties, stream, Context, MainLoop, PW_ID_CORE};
-
 mod dbapi;
 use dbapi::*;
 
