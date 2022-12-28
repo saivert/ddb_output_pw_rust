@@ -21,7 +21,7 @@ fn main() {
     // to bindgen, and lets you build up options for
     // the resulting bindings.
     let mut builder = bindgen::Builder::default();
-    builder = builder.header("src/wrapper.h")
+    builder = builder.header("wrapper.h")
                 .rustfmt_bindings(true)
                 .derive_default(true)
                 .derive_eq(true)

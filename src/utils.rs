@@ -1,23 +1,4 @@
-use std::ffi::CString;
 use crate::ddb_waveformat_t;
-pub(crate) struct LossyCString;
-
-impl LossyCString {
-    #[allow(clippy::new_ret_no_self)]
-    pub(crate) fn new<T: AsRef<str>>(t: T) -> CString {
-        match CString::new(t.as_ref()) {
-            Ok(cstr) => cstr,
-            Err(_) => CString::new(t.as_ref().replace('\0', "")).expect("string has no nulls"),
-        }
-    }
-}
-
-
-macro_rules! lit_cstr {
-    ($s:literal) => {
-        (concat!($s, "\0").as_bytes().as_ptr() as *const c_char)
-    };
-}
 
 pub fn db_format_to_pipewire(input: ddb_waveformat_t) -> u32 {
     match input.bps {
@@ -49,4 +30,10 @@ pub fn print_pipewire_format(format: u32, channels: u32, rate: u32) {
         libspa_sys::SPA_AUDIO_FORMAT_S32_LE => "32 bps",
         _ => "unknown bps"
     }, channels, rate);
+}
+
+macro_rules! lit_cstr {
+    ($s:expr) => {
+        (concat!($s, "\0").as_bytes().as_ptr() as *const c_char)
+    };
 }

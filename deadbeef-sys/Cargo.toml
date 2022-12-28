@@ -1,0 +1,10 @@
+[package]
+name = "deadbeef-sys"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lossycstring = {path = "../lossycstring"}
+
+[build-dependencies]
+bindgen = {version = "0.59.0", default-features = false}
