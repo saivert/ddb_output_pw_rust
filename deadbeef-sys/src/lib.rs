@@ -6,7 +6,7 @@
 
 use lossycstring::LossyCString;
 
-use std::ffi::c_void;
+use std::ffi::{c_void, c_char};
 
 static mut DEADBEEF: Option<DeadBeef> = None;
 static mut DEADBEEF_THREAD_ID: Option<std::thread::ThreadId> = None;
@@ -19,11 +19,54 @@ pub use api::*;
 /// Main DeadBeef struct that encapsulates common DeadBeef API functions.
 pub struct DeadBeef {
     pub(crate) ptr: *const DB_functions_t,
-    pub(crate) plugin_ptr: *mut DB_output_t,
+    pub(crate) plugin_ptr: *mut DB_plugin_t,
+}
+
+pub struct SoundcardCallback {
+    userdata: *mut c_void,
+    cb: unsafe extern "C" fn(name: *const c_char, desc: *const c_char, _userdata: *mut c_void),
+}
+
+impl SoundcardCallback {
+    pub fn new(cb: unsafe extern "C" fn(name: *const c_char, desc: *const c_char, _userdata: *mut c_void), userdata: *mut c_void) -> SoundcardCallback {
+        SoundcardCallback {
+            userdata,
+            cb
+        }
+    }
+
+    pub fn addcard(&self, name: &str, desc: &str) {
+        let name = LossyCString::new(name);
+        let desc = LossyCString::new(desc);
+        unsafe {
+            (self.cb)(name.as_ptr(), desc.as_ptr(), self.userdata);
+        }
+    }
+}
+
+pub trait DBPlugin {
+    fn new(plugin: DB_output_t) -> Self;
+    fn get_plugin_ptr(&mut self) -> *mut c_void;
+    fn plugin_start(&mut self);
+    fn plugin_stop(&mut self);
+}
+
+pub trait DBOutput: DBPlugin {
+    fn init(&mut self) -> i32 {0}
+    fn free(&mut self);
+    fn play(&mut self);
+    fn stop(&mut self);
+    fn pause(&mut self);
+    fn unpause(&mut self);
+    fn getstate(&self) -> ddb_playback_state_e;
+    fn setformat(&mut self, fmt: ddb_waveformat_t);
+    fn message(&self, msgid: u32, ctx: usize, p1: u32, p2: u32);
+    fn enum_soundcards(&self, callback: SoundcardCallback);
+    
 }
 
 impl DeadBeef {
-    pub unsafe fn init_from_ptr(api: *const DB_functions_t, plugin: *mut DB_output_t) -> DeadBeef {
+    pub unsafe fn init_from_ptr(api: *const DB_functions_t, plugin: *mut DB_plugin_t) -> DeadBeef {
         assert!(!api.is_null());
 
         DEADBEEF = Some(DeadBeef { ptr: api, plugin_ptr: plugin });

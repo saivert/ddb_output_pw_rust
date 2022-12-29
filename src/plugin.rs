@@ -54,21 +54,39 @@ impl PlaybackThread {
     }
 }
 
-impl OutputPlugin {
-    pub fn new(plugin: DB_output_t) -> OutputPlugin {
-        OutputPlugin {
+impl DBPlugin for OutputPlugin {
+
+    fn new(plugin: DB_output_t) -> Self {
+        Self {
             plugin,
             state: DDB_PLAYBACK_STATE_STOPPED,
             thread: None,
             requested_fmt: None,
         }
     }
-
-    pub fn get_plugin_ptr(&mut self) -> *mut DB_output_t {
-        &mut self.plugin as *mut _
+    fn get_plugin_ptr(&mut self) -> *mut c_void {
+        &mut self.plugin as *mut DB_output_t as *mut c_void
     }
 
-    pub fn init(&mut self) -> i32 {
+    fn plugin_start(&mut self) {
+
+    }
+    fn plugin_stop(&mut self) {
+
+    }
+}
+
+impl OutputPlugin {
+    fn msgtothread(&self, msg: PwThreadMessage) {
+        if let Some(s) = self.thread.as_ref() {
+            s.msg(msg);
+        }
+    }
+}
+
+impl DBOutput for OutputPlugin {
+
+    fn init(&mut self) -> i32 {
         if let Some(rfmt) = self.requested_fmt {
             self.plugin.fmt = rfmt;
         } else {
@@ -88,20 +106,14 @@ impl OutputPlugin {
         0
     }
 
-    pub fn play(&mut self) {
+    fn play(&mut self) {
         if self.thread.is_none() {
             self.init();
         }
         self.state = DDB_PLAYBACK_STATE_PLAYING;
     }
 
-    fn msgtothread(&self, msg: PwThreadMessage) {
-        if let Some(s) = self.thread.as_ref() {
-            s.msg(msg);
-        }
-    }
-
-    pub fn stop(&mut self) {
+    fn stop(&mut self) {
         self.msgtothread(PwThreadMessage::Terminate);
         if let Some(t) = self.thread.take() {
             match t.join() {
@@ -116,11 +128,11 @@ impl OutputPlugin {
         self.thread = None;
     }
 
-    pub fn free(&mut self) {
+    fn free(&mut self) {
         self.stop();
     }
 
-    pub fn pause(&mut self) {
+    fn pause(&mut self) {
         if self.thread.is_none() {
             self.init();
         }
@@ -129,7 +141,7 @@ impl OutputPlugin {
         self.state = DDB_PLAYBACK_STATE_PAUSED;
     }
 
-    pub fn unpause(&mut self) {
+    fn unpause(&mut self) {
         if self.thread.is_none() {
             self.init();
         }
@@ -139,11 +151,11 @@ impl OutputPlugin {
         }
     }
 
-    pub fn getstate(&self) -> ddb_playback_state_e {
+    fn getstate(&self) -> ddb_playback_state_e {
         self.state
     }
 
-    pub fn setformat(&mut self, fmt: ddb_waveformat_t) {
+    fn setformat(&mut self, fmt: ddb_waveformat_t) {
         if fmt == self.plugin.fmt {
             println!("Format is equal. Not requesting change.");
             return;
@@ -160,7 +172,7 @@ impl OutputPlugin {
     }
 
     #[allow(unused)]
-    pub fn message(&self, msgid: u32, ctx: usize, p1: u32, p2: u32) {
+    fn message(&self, msgid: u32, ctx: usize, p1: u32, p2: u32) {
         match msgid {
             DB_EV_SONGSTARTED => println!("rust: song started"),
             DB_EV_VOLUMECHANGED => {
@@ -170,7 +182,7 @@ impl OutputPlugin {
         }
     }
 
-    pub fn enum_soundcards(&self, callback: SoundcardCallback) {
+    fn enum_soundcards(&self, callback: SoundcardCallback) {
         let mainloop = MainLoop::new().expect("Failed to create mainloop");
         let context = Context::new(&mainloop).expect("Failed to create context");
         let core = context.connect(None).expect("Failed to connect to remote");
@@ -343,7 +355,6 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
     // When we receive a `Terminate` message, quit the main loop.
     let _receiver = pw_receiver.attach(&mainloop, {
         let mainloop = mainloop.clone();
-        let ourdisconnect = ourdisconnect.clone();
         move |msg| {
             match msg {
                 PwThreadMessage::Terminate => mainloop.quit(),

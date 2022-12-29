@@ -2,8 +2,6 @@ use std::ffi::{c_char, c_int, c_void};
 
 use deadbeef_sys::*;
 
-use lossycstring::LossyCString;
-
 #[macro_use]
 mod utils;
 use utils::*;
@@ -96,6 +94,12 @@ extern "C" fn getstate() -> ddb_playback_state_t {
 
 extern "C" fn plugin_start() -> c_int {
     pipewire::init();
+
+    unsafe {
+        if let Some(p) = &mut PLUGIN{
+            p.plugin_start();
+        }
+    }
     0
 }
 
@@ -107,27 +111,7 @@ extern "C" fn plugin_stop() -> c_int {
     0
 }
 
-pub struct SoundcardCallback {
-    userdata: *mut c_void,
-    cb: unsafe extern "C" fn(name: *const c_char, desc: *const c_char, _userdata: *mut c_void),
-}
 
-impl SoundcardCallback {
-    pub fn new(cb: unsafe extern "C" fn(name: *const c_char, desc: *const c_char, _userdata: *mut c_void), userdata: *mut c_void) -> SoundcardCallback {
-        SoundcardCallback {
-            userdata,
-            cb
-        }
-    }
-
-    pub fn addcard(&self, name: &str, desc: &str) {
-        let name = LossyCString::new(name);
-        let desc = LossyCString::new(desc);
-        unsafe {
-            (self.cb)(name.as_ptr(), desc.as_ptr(), self.userdata);
-        }
-    }
-}
 
 extern "C" fn enum_soundcards(
     callback: Option<
@@ -159,7 +143,7 @@ extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_int {
 /// This is requires since this is a plugin export function
 pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
     api: *const DB_functions_t,
-) -> *mut DB_output_s {
+) -> *mut DB_plugin_t {
     let x = DB_output_t {
         init: Some(init),
         free: Some(free),
@@ -205,7 +189,7 @@ pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
 
     let y = PLUGIN.as_mut().unwrap().get_plugin_ptr();
 
-    DeadBeef::init_from_ptr(api, y);
+    DeadBeef::init_from_ptr(api, y as *mut DB_plugin_t);
 
-    y
+    y as *mut DB_plugin_t
 }
