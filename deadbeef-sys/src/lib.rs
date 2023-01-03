@@ -6,7 +6,7 @@
 
 use lossycstring::LossyCString;
 
-use std::ffi::{c_void, c_char};
+use std::ffi::c_void;
 
 static mut DEADBEEF: Option<DeadBeef> = None;
 static mut DEADBEEF_THREAD_ID: Option<std::thread::ThreadId> = None;
@@ -20,28 +20,6 @@ pub use api::*;
 pub struct DeadBeef {
     pub(crate) ptr: *const DB_functions_t,
     pub(crate) plugin_ptr: *mut DB_plugin_t,
-}
-
-pub struct SoundcardCallback {
-    userdata: *mut c_void,
-    cb: unsafe extern "C" fn(name: *const c_char, desc: *const c_char, _userdata: *mut c_void),
-}
-
-impl SoundcardCallback {
-    pub fn new(cb: unsafe extern "C" fn(name: *const c_char, desc: *const c_char, _userdata: *mut c_void), userdata: *mut c_void) -> SoundcardCallback {
-        SoundcardCallback {
-            userdata,
-            cb
-        }
-    }
-
-    pub fn addcard(&self, name: &str, desc: &str) {
-        let name = LossyCString::new(name);
-        let desc = LossyCString::new(desc);
-        unsafe {
-            (self.cb)(name.as_ptr(), desc.as_ptr(), self.userdata);
-        }
-    }
 }
 
 pub trait DBPlugin {
@@ -60,9 +38,8 @@ pub trait DBOutput: DBPlugin {
     fn unpause(&mut self);
     fn getstate(&self) -> ddb_playback_state_e;
     fn setformat(&mut self, fmt: ddb_waveformat_t);
-    fn message(&self, msgid: u32, ctx: usize, p1: u32, p2: u32);
-    fn enum_soundcards(&self, callback: SoundcardCallback);
-    
+    fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32);
+    fn enum_soundcards<F>(&self, callback: F) where F: Fn(&str, &str) + 'static;
 }
 
 impl DeadBeef {

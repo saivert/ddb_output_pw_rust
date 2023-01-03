@@ -121,8 +121,12 @@ extern "C" fn enum_soundcards(
 ) {
     unsafe {
         if let Some(p) = &PLUGIN {
-            let callback: SoundcardCallback = SoundcardCallback::new(callback.unwrap(), userdata);
-            p.enum_soundcards(callback);
+            
+            p.enum_soundcards(move|name, desc| {
+                let name = LossyCString::new(name);
+                let desc = LossyCString::new(desc);
+                callback.unwrap()(name.as_ptr(), desc.as_ptr(), userdata);
+            });
         }
     }
 }
