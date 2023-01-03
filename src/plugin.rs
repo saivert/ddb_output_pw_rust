@@ -69,10 +69,10 @@ impl DBPlugin for OutputPlugin {
     }
 
     fn plugin_start(&mut self) {
-
+        pipewire::init();
     }
     fn plugin_stop(&mut self) {
-
+        unsafe { pipewire::deinit(); }
     }
 }
 

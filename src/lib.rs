@@ -94,8 +94,6 @@ extern "C" fn getstate() -> ddb_playback_state_t {
 }
 
 extern "C" fn plugin_start() -> c_int {
-    pipewire::init();
-
     unsafe {
         if let Some(p) = &mut PLUGIN{
             p.plugin_start();
@@ -106,7 +104,6 @@ extern "C" fn plugin_start() -> c_int {
 
 extern "C" fn plugin_stop() -> c_int {
     unsafe {
-        pipewire::deinit();
         PLUGIN = None;
     }
     0
