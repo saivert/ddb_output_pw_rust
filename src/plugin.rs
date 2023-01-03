@@ -172,7 +172,7 @@ impl DBOutput for OutputPlugin {
     }
 
     #[allow(unused)]
-    fn message(&self, msgid: u32, ctx: usize, p1: u32, p2: u32) {
+    fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32) {
         match msgid {
             DB_EV_SONGSTARTED => println!("rust: song started"),
             DB_EV_VOLUMECHANGED => {
