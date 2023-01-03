@@ -270,7 +270,7 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
 
     let ourdisconnect = Rc::new(std::cell::Cell::new(false));
 
-    let stream = pipewire::stream::Stream::<i32>::with_user_data(
+    let stream = match pipewire::stream::Stream::<i32>::with_user_data(
         &mainloop,
         "deadbeef",
         props,
@@ -329,8 +329,14 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
             }
         }
     })
-    .create()
-    .expect("Error creating stream!");
+    .create() {
+        Ok(a) => a,
+        Err(e) => {    
+            DeadBeef::log_detailed(DDB_LOG_LAYER_DEFAULT, format!("Pipewire: Unable to create stream, {}\n", e.to_string()).as_str());
+            DeadBeef::sendmessage(DB_EV_STOP, 0, 0, 0);
+            return;
+        }
+    };
 
     let mut buffer = [0;1024];
     let fmtpod = {
@@ -342,23 +348,29 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
         create_audio_format_pod(format, channels, rate, &mut buffer)
     };
 
-    stream
-        .connect(
-            pipewire::spa::Direction::Output,
-            None,
-            stream::StreamFlags::AUTOCONNECT
-                | stream::StreamFlags::MAP_BUFFERS
-                | stream::StreamFlags::RT_PROCESS,
-            &mut [fmtpod],
-        )
-        .expect("Error connecting stream!");
+    if let Err(e) = stream.connect(
+        pipewire::spa::Direction::Output,
+        None,
+        stream::StreamFlags::AUTOCONNECT
+            | stream::StreamFlags::MAP_BUFFERS
+            | stream::StreamFlags::RT_PROCESS,
+        &mut [fmtpod],
+    ) {
+        DeadBeef::log_detailed(DDB_LOG_LAYER_DEFAULT, format!("Pipewire: Unable to connect stream, {}\n", e.to_string()).as_str());
+        DeadBeef::sendmessage(DB_EV_STOP, 0, 0, 0);
+        return;
+    }
 
     // When we receive a `Terminate` message, quit the main loop.
     let _receiver = pw_receiver.attach(&mainloop, {
         let mainloop = mainloop.clone();
+        let ourdisconnect = ourdisconnect.clone();
         move |msg| {
             match msg {
-                PwThreadMessage::Terminate => mainloop.quit(),
+                PwThreadMessage::Terminate => {
+                    ourdisconnect.set(true);
+                    mainloop.quit();
+                },
                 PwThreadMessage::Pause => stream.set_active(false).unwrap(),
                 PwThreadMessage::Unpause => stream.set_active(true).unwrap(),
                 PwThreadMessage::SetFmt { format, channels, rate } => {
@@ -371,16 +383,18 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
                         let mut buffer = [0;1024];
                         let newformatpod: *mut libspa_sys::spa_pod = create_audio_format_pod(format, channels, rate, &mut buffer);
 
-                        stream
-                        .connect(
+                        if stream.connect(
                             pipewire::spa::Direction::Output,
                             None,
                             stream::StreamFlags::AUTOCONNECT
                                 | stream::StreamFlags::MAP_BUFFERS
                                 | stream::StreamFlags::RT_PROCESS,
                             &mut [newformatpod],
-                        )
-                        .expect("Error connecting stream!");
+                        ).is_err() {
+                            DeadBeef::log_detailed(DDB_LOG_LAYER_DEFAULT, "Pipewire: Unable to connect stream, terminating\n");
+                            DeadBeef::sendmessage(DB_EV_STOP, 0, 0, 0);
+                            return;
+                        }
 
                         let s = format!("1/{}", rate);
                         let props = properties!{
