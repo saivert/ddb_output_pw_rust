@@ -4,6 +4,7 @@ use deadbeef_sys::*;
 
 #[macro_use]
 mod utils;
+use lossycstring::LossyCString;
 use utils::*;
 
 mod plugin;
