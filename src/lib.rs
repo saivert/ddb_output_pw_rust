@@ -132,7 +132,7 @@ extern "C" fn enum_soundcards(
 
 extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_int {
     unsafe {
-        if let Some(p) = &PLUGIN {
+        if let Some(p) = PLUGIN.as_mut() {
             p.message(msgid, ctx, p1, p2);
         }
     }
