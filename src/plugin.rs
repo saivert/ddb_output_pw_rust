@@ -182,7 +182,8 @@ impl DBOutput for OutputPlugin {
         }
     }
 
-    fn enum_soundcards(&self, callback: SoundcardCallback) {
+    fn enum_soundcards<F>(&self, callback: F)
+    where F: Fn(&str, &str) + 'static  {
         let mainloop = MainLoop::new().expect("Failed to create mainloop");
         let context = Context::new(&mainloop).expect("Failed to create context");
         let core = context.connect(None).expect("Failed to connect to remote");
@@ -199,7 +200,7 @@ impl DBOutput for OutputPlugin {
                     if media_class.eq("Audio/Sink") || media_class.eq("Audio/Duplex") {
                         let name = props.get("node.name").unwrap_or("");
                         if !name.is_empty() {
-                            callback.addcard(name, props.get("node.description").unwrap_or(""));
+                            callback(name, props.get("node.description").unwrap_or(""));
                         }
                     }
                 }
