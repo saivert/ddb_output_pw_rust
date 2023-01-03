@@ -35,9 +35,9 @@ enum PwThreadMessage {
 }
 
 impl PlaybackThread {
-    pub fn new(init_fmt: ddb_waveformat_t) -> PlaybackThread {
+    pub fn new(init_fmt: ddb_waveformat_t) -> Self {
         let (sender, receiver) = pipewire::channel::channel();
-        PlaybackThread {
+        Self {
             handle: thread::spawn(move || pw_thread_main(init_fmt, receiver)),
             sender,
         }
