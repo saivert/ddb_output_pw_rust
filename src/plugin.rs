@@ -228,8 +228,54 @@ impl DBOutput for OutputPlugin {
     }
 }
 
+fn set_channel_map(channels: u32, audioinfo: &mut libspa_sys::spa_audio_info_raw) {
+    if channels == 1 {
+        audioinfo.position[0] = libspa_sys::SPA_AUDIO_CHANNEL_MONO;
+    }
+    if channels >= 2 {
+        audioinfo.position[0] = libspa_sys::SPA_AUDIO_CHANNEL_FL;
+        audioinfo.position[1] = libspa_sys::SPA_AUDIO_CHANNEL_FR;
+    }
+    if channels >= 3 {
+        audioinfo.position[2] = libspa_sys::SPA_AUDIO_CHANNEL_FC;
+    }
+    if channels >= 4 {
+        audioinfo.position[3] = libspa_sys::SPA_AUDIO_CHANNEL_LFE;
+    }
+    if channels >= 6 {
+        audioinfo.position[4] = libspa_sys::SPA_AUDIO_CHANNEL_RL;
+        audioinfo.position[5] = libspa_sys::SPA_AUDIO_CHANNEL_RR;
+    }
+    if channels >= 8 {
+        audioinfo.position[6] = libspa_sys::SPA_AUDIO_CHANNEL_FLC;
+        audioinfo.position[7] = libspa_sys::SPA_AUDIO_CHANNEL_FRC;
+    }
+    if channels >= 9 {
+        audioinfo.position[8] = libspa_sys::SPA_AUDIO_CHANNEL_RC;
+    }
+    if channels >= 11 {
+        audioinfo.position[9] = libspa_sys::SPA_AUDIO_CHANNEL_SL;
+        audioinfo.position[10] = libspa_sys::SPA_AUDIO_CHANNEL_SR;
+    }
+    if channels >= 12 {
+        audioinfo.position[11] = libspa_sys::SPA_AUDIO_CHANNEL_TC;
+    }
+    if channels >= 15 {
+        audioinfo.position[12] = libspa_sys::SPA_AUDIO_CHANNEL_TFL;
+        audioinfo.position[13] = libspa_sys::SPA_AUDIO_CHANNEL_TFC;
+        audioinfo.position[14] = libspa_sys::SPA_AUDIO_CHANNEL_TFR;
+
+    }
+    if channels >= 18 {
+        audioinfo.position[15] = libspa_sys::SPA_AUDIO_CHANNEL_TRL;
+        audioinfo.position[16] = libspa_sys::SPA_AUDIO_CHANNEL_TRC;
+        audioinfo.position[17] = libspa_sys::SPA_AUDIO_CHANNEL_TRR;
+    }
+}
+
 fn create_audio_format_pod(format: u32, channels: u32, rate: u32, buffer: &mut [u8]) -> *mut libspa_sys::spa_pod {
     unsafe {
+
         let mut b: libspa_sys::spa_pod_builder = std::mem::zeroed();
         b.data = buffer.as_mut_ptr() as *mut c_void;
         b.size = buffer.len() as u32;
@@ -240,6 +286,8 @@ fn create_audio_format_pod(format: u32, channels: u32, rate: u32, buffer: &mut [
             channels,
             position: std::mem::zeroed(),
         };
+        set_channel_map(channels, &mut audioinfo);
+
         libspa_sys::spa_format_audio_raw_build(&mut b as *mut libspa_sys::spa_pod_builder,
             libspa_sys::SPA_PARAM_EnumFormat,
             &mut audioinfo as *mut libspa_sys::spa_audio_info_raw)
@@ -324,8 +372,10 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
         if id == libspa_sys::SPA_PROP_channelVolumes {
             unsafe {
                 let control = *control_ptr;
-                let values = std::slice::from_raw_parts(control.values, control.n_values as usize);
-                DeadBeef::volume_set_amp(values[0]);
+                if control.n_values > 0 {
+                    let values = std::slice::from_raw_parts(control.values, control.n_values as usize);
+                    DeadBeef::volume_set_amp(values[0]);
+                }
             }
         }
     })
