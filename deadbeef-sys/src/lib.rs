@@ -43,13 +43,18 @@ pub trait DBOutput: DBPlugin {
 }
 
 impl DeadBeef {
-    pub unsafe fn init_from_ptr(api: *const DB_functions_t, plugin: *mut DB_plugin_t) -> DeadBeef {
+    pub unsafe fn init_from_ptr(api: *const DB_functions_t) -> DeadBeef {
         assert!(!api.is_null());
 
-        DEADBEEF = Some(DeadBeef { ptr: api, plugin_ptr: plugin });
+        DEADBEEF = Some(DeadBeef { ptr: api, plugin_ptr: std::ptr::null_mut() as *mut DB_plugin_t });
         DEADBEEF_THREAD_ID = Some(std::thread::current().id());
 
-        DeadBeef { ptr: api, plugin_ptr: plugin }
+        DeadBeef { ptr: api, plugin_ptr: std::ptr::null_mut() as *mut DB_plugin_t }
+    }
+
+    pub fn set_plugin_ptr(ptr: *mut DB_plugin_t) {
+        let deadbeef = unsafe { DeadBeef::deadbeef() };
+        deadbeef.plugin_ptr = ptr;
     }
 
     pub unsafe fn deadbeef() -> &'static mut DeadBeef {

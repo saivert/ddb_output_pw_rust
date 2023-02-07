@@ -187,11 +187,13 @@ pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
         },
     };
 
+    DeadBeef::init_from_ptr(api);
+
     PLUGIN = Some(OutputPlugin::new(x));
 
     let y = PLUGIN.as_mut().unwrap().get_plugin_ptr();
 
-    DeadBeef::init_from_ptr(api, y as *mut DB_plugin_t);
+    DeadBeef::set_plugin_ptr(y as *mut DB_plugin_t);
 
     y as *mut DB_plugin_t
 }
