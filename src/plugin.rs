@@ -1,6 +1,6 @@
 use crate::*;
 
-use std::thread;
+use std::{thread, cell::Cell};
 use std::rc::Rc;
 
 use pipewire::{prelude::*, properties, stream, Context, MainLoop, PW_ID_CORE};
@@ -25,9 +25,7 @@ enum PwThreadMessage {
     Pause,
     Unpause,
     SetFmt {
-        format: u32,
-        channels: u32,
-        rate: u32,
+        format: ddb_waveformat_t,
     },
     SetVol {
         newvol: f32,
@@ -87,18 +85,11 @@ impl OutputPlugin {
 impl DBOutput for OutputPlugin {
 
     fn init(&mut self) -> i32 {
-        if let Some(rfmt) = self.requested_fmt {
-            self.plugin.fmt = rfmt;
-        } else {
-            self.plugin.fmt = ddb_waveformat_t {
-                samplerate: 44100,
-                bps: 16,
-                channels: 2,
-                channelmask: 3,
-                is_bigendian: 0,
-                is_float: 0,
-            }
+        if self.requested_fmt.is_none() {
+            self.requested_fmt = Some(get_default_waveformat());
         }
+
+        self.plugin.fmt = self.requested_fmt.unwrap();
 
         self.thread = Some(PlaybackThread::new(self.plugin.fmt));
 
@@ -124,7 +115,6 @@ impl DBOutput for OutputPlugin {
             }
         }
         self.state = DDB_PLAYBACK_STATE_STOPPED;
-        self.requested_fmt = None;
         self.thread = None;
     }
 
@@ -160,21 +150,19 @@ impl DBOutput for OutputPlugin {
             println!("Format is equal. Not requesting change.");
             return;
         }
-        self.requested_fmt = Some(fmt);
-        self.plugin.fmt = fmt;
+        self.plugin.fmt = if fmt.channels == 0 {
+            get_default_waveformat()
+        } else {
+            fmt
+        };
+        self.requested_fmt = Some(self.plugin.fmt);
         print_db_format(fmt);
-        let pwfmt = db_format_to_pipewire(fmt);
-        self.msgtothread(PwThreadMessage::SetFmt {
-            format: pwfmt,
-            channels: fmt.channels as u32,
-            rate: fmt.samplerate as u32,
-        });
+        self.msgtothread(PwThreadMessage::SetFmt { format: fmt });
     }
 
     #[allow(unused)]
     fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32) {
         match msgid {
-            DB_EV_SONGSTARTED => println!("rust: song started"),
             DB_EV_VOLUMECHANGED => {
                 self.msgtothread(PwThreadMessage::SetVol { newvol: DeadBeef::volume_get_amp() })
             },
@@ -284,7 +272,7 @@ fn create_audio_format_pod(format: u32, channels: u32, rate: u32, buffer: &mut [
             flags: 0,
             rate,
             channels,
-            position: std::mem::zeroed(),
+            position: [libspa_sys::SPA_AUDIO_CHANNEL_UNKNOWN; 64],
         };
         set_channel_map(channels, &mut audioinfo);
 
@@ -313,10 +301,11 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
     props.insert("node.rate", &s);
 
     if !device.eq("default") {
-        props.insert(*pipewire::keys::NODE_TARGET, &device);
+        props.insert(*pipewire::keys::TARGET_OBJECT, &device);
     }
 
-    let ourdisconnect = Rc::new(std::cell::Cell::new(false));
+    let ourdisconnect = Rc::new(Cell::new(false));
+    let buffersize = Rc::new(Cell::new((init_fmt.bps/8 * init_fmt.channels * 25 * init_fmt.samplerate/1000) as usize));
 
     let stream = match pipewire::stream::Stream::<i32>::with_user_data(
         &mainloop,
@@ -347,34 +336,51 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
             }
         }
     })
-    .process(move |stream, _user_data| {
-        match stream.dequeue_buffer() {
-            None => println!("No buffer received"),
-            Some(mut buffer) => {
-                let datas = buffer.datas_mut();
-                if let Some(d) = datas[0].data() {
+    .process({
+        let buffersize = buffersize.clone();
+        move |stream, _user_data| {
+            match stream.dequeue_buffer() {
+                None => println!("No buffer received"),
+                Some(mut buffer) => {
+                    let datas = buffer.datas_mut();
 
-                    let bytesread = if DeadBeef::streamer_ok_to_read(-1) > 0 {
-                        DeadBeef::streamer_read(d.as_mut_ptr() as *mut c_void, 4096)
-                    } else {
-                        stream.flush(false).expect("");
-                        0
-                    };
+                    let maxsize = datas[0].as_raw().maxsize as usize;
+                    if let Some(d) = datas[0].data() {
 
-                    *datas[0].chunk_mut().size_mut() = bytesread as u32;
-                    *datas[0].chunk_mut().offset_mut() = 0;
-                    *datas[0].chunk_mut().stride_mut() = 1;
+                        let len = buffersize.get().min(maxsize);
+
+                        let bytesread = if DeadBeef::streamer_ok_to_read(-1) > 0 {
+                            DeadBeef::streamer_read(d.as_mut_ptr() as *mut c_void, len)
+                        } else {
+                            0
+                        };
+
+                        *datas[0].chunk_mut().size_mut() = bytesread as u32;
+                        *datas[0].chunk_mut().offset_mut() = 0;
+                        *datas[0].chunk_mut().stride_mut() = 1;
+
+                        if bytesread == 0 {
+                            buffer.queue();
+                            stream.flush(false).expect("flush");
+                        }
+                    }
                 }
-            }
-        };
+            };
+        }
     })
-    .control_info(|id, control_ptr: *const pipewire::sys::pw_stream_control| {
+    .control_info(
+        move |id, control_ptr: *const pipewire::sys::pw_stream_control| {
         if id == libspa_sys::SPA_PROP_channelVolumes {
             unsafe {
                 let control = *control_ptr;
                 if control.n_values > 0 {
                     let values = std::slice::from_raw_parts(control.values, control.n_values as usize);
-                    DeadBeef::volume_set_amp(values[0]);
+                    for v in values.iter() {
+                        if *v != DeadBeef::volume_get_amp() {
+                            DeadBeef::volume_set_amp(*v);
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -414,7 +420,7 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
     // When we receive a `Terminate` message, quit the main loop.
     let _receiver = pw_receiver.attach(&mainloop, {
         let mainloop = mainloop.clone();
-        let ourdisconnect = ourdisconnect.clone();
+        let buffersize = buffersize.clone();
         move |msg| {
             match msg {
                 PwThreadMessage::Terminate => {
@@ -423,15 +429,20 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
                 },
                 PwThreadMessage::Pause => stream.set_active(false).unwrap(),
                 PwThreadMessage::Unpause => stream.set_active(true).unwrap(),
-                PwThreadMessage::SetFmt { format, channels, rate } => {
+                PwThreadMessage::SetFmt { format } => {
                     ourdisconnect.set(true);
+                    stream.set_active(false).unwrap();
                     if stream.disconnect().is_ok() {
 
-                        println!("Set format called with: Format = {format}, Channels = {channels}, rate = {rate}");
-                        print_pipewire_format(format, channels, rate);
+                        print!("Set format called with: ");
+                        let pwfmt = db_format_to_pipewire(format);
+                        let channels = format.channels as u32;
+                        let samplerate = format.samplerate as u32;
+                        print_pipewire_format(pwfmt, channels, samplerate);
     
                         let mut buffer = [0;1024];
-                        let newformatpod: *mut libspa_sys::spa_pod = create_audio_format_pod(format, channels, rate, &mut buffer);
+                        let newformatpod: *mut libspa_sys::spa_pod = create_audio_format_pod(pwfmt, channels, samplerate, &mut buffer);
+                        buffersize.set((format.bps/8 * format.channels * 25 * format.samplerate/1000) as usize);
 
                         if stream.connect(
                             pipewire::spa::Direction::Output,
@@ -446,7 +457,7 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
                             return;
                         }
 
-                        let s = format!("1/{}", rate);
+                        let s = format!("1/{}", samplerate);
                         let props = properties!{
                             "node.rate" => s
                         };
@@ -456,7 +467,7 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
                     }
                 },
                 PwThreadMessage::SetVol { newvol } => {
-                    let values = [newvol, newvol];
+                    let values = [newvol];
                     stream.set_control(libspa_sys::SPA_PROP_channelVolumes, &values).expect("Unable to set volume");
                 }
             };
