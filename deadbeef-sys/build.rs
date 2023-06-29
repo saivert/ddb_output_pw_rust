@@ -10,6 +10,10 @@ fn main() {
         "ddb_.*",
         "playback_order_t",
         "playback_mode_t",
+        "ddb_plugin_flag_t",
+        "db_log_layer_t",
+        "db_plugin_type_t",
+        "db_ev_t",
         "DB_.*"
     ];
     const INCLUDED_VARS: &[&str] = &[
@@ -25,6 +29,7 @@ fn main() {
                 .rustfmt_bindings(true)
                 .derive_default(true)
                 .derive_eq(true)
+                .default_enum_style(bindgen::EnumVariation::Consts)
                 .prepend_enum_name(false);
 
     for t in INCLUDED_TYPES {

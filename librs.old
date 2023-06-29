@@ -1,0 +1,509 @@
+
+// use cpp::cpp;
+// cpp! {{
+//     #include <spa/param/audio/format-utils.h>
+//     #include <spa/param/props.h>
+//     #include <pipewire/pipewire.h>
+
+// }}
+
+use std::ffi::{c_char, c_int, c_void};
+
+use std::thread;
+use std::{rc::Rc, sync::Mutex};
+
+use pipewire::{prelude::*, properties, stream, Context, MainLoop, PW_ID_CORE};
+
+mod dbapi;
+use dbapi::*;
+
+mod plugin;
+
+#[macro_use]
+mod utils;
+use utils::LossyCString;
+
+static mut PLUGIN: Option<DB_output_t> = None;
+
+static mut DEADBEEF: Option<DeadBeef> = None;
+static mut DEADBEEF_THREAD_ID: Option<std::thread::ThreadId> = None;
+
+static STATE: Mutex<ddb_playback_state_e> = Mutex::new(DDB_PLAYBACK_STATE_STOPPED);
+
+static mut REQUESTED_FMT: Option<ddb_waveformat_t> = None;
+
+#[derive(Debug)]
+pub enum PwThreadMessage {
+    Terminate,
+    Pause,
+    Unpause,
+    SetFmt{format: u32, channels: u32, rate: u32},
+    SetVol{newvol: f32},
+    Flush
+}
+
+static RESULT_SENDER: Mutex<Option<pipewire::channel::Sender<PwThreadMessage>>> = Mutex::new(None);
+
+pub fn db_format_to_pipewire(input: ddb_waveformat_t) -> u32 {
+    match input.bps {
+        8 => libspa_sys::SPA_AUDIO_FORMAT_S8,
+        16 => libspa_sys::SPA_AUDIO_FORMAT_S16_LE,
+        24 => libspa_sys::SPA_AUDIO_FORMAT_S24_LE,
+        32 => match input.is_float == 1 {
+            true => libspa_sys::SPA_AUDIO_FORMAT_F32_LE,
+            false => libspa_sys::SPA_AUDIO_FORMAT_S32_LE,
+        },
+        _ => libspa_sys::SPA_AUDIO_FORMAT_UNKNOWN,
+    }
+}
+
+fn print_db_format(input: ddb_waveformat_t) {
+    println!("db format: {} bps{}, {} channels, {} kHz",
+        input.bps,
+        if input.is_float == 1 {" float"} else {""},
+        input.channels,
+        input.samplerate);
+}
+
+fn print_pipewire_format(format: u32, channels: u32, rate: u32) {
+    println!("pw format: {}, {} channels, {} kHz", match format {
+        libspa_sys::SPA_AUDIO_FORMAT_S8 => "8 bps",
+        libspa_sys::SPA_AUDIO_FORMAT_S16_LE => "16 bps",
+        libspa_sys::SPA_AUDIO_FORMAT_S24_LE => "24 bps",
+        libspa_sys::SPA_AUDIO_FORMAT_F32_LE => "32 bps float",
+        libspa_sys::SPA_AUDIO_FORMAT_S32_LE => "32 bps",
+        _ => "unknown bps"
+    }, channels, rate);
+}
+
+// Until pipewire-rs get bindings for POD building we have to cheat and use C++ for this
+/* fn create_audio_format_pod(format: u32, channels: u32, rate: u32 ) -> *mut libspa_sys::spa_pod {
+    unsafe {
+        cpp!([format as "int", channels as "int", rate as "int"] -> *mut libspa_sys::spa_pod as "spa_pod *" {
+            uint8_t buffer[1024];
+
+            struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
+
+            struct spa_audio_info_raw rawinfo = {};
+            rawinfo.format = (enum spa_audio_format)format;
+            rawinfo.channels = channels;
+            rawinfo.rate = rate;
+            return spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &rawinfo);
+        })
+    }
+} */
+
+fn create_audio_format_pod_rust(format: u32, channels: u32, rate: u32, buffer: &mut [u8]) -> *mut libspa_sys::spa_pod {
+    unsafe {
+        let mut b: libspa_sys::spa_pod_builder = std::mem::zeroed();
+        b.data = buffer.as_mut_ptr() as *mut c_void;
+        b.size = buffer.len() as u32;
+        let mut audioinfo = libspa_sys::spa_audio_info_raw {
+            format,
+            flags: 0,
+            rate,
+            channels,
+            position: std::mem::zeroed(),
+        };
+        libspa_sys::spa_format_audio_raw_build(&mut b as *mut libspa_sys::spa_pod_builder,
+            libspa_sys::SPA_PARAM_EnumFormat,
+            &mut audioinfo as *mut libspa_sys::spa_audio_info_raw)
+    }
+}
+
+pub fn pw_thread_main(pw_receiver: pipewire::channel::Receiver<PwThreadMessage>) {
+    let mainloop = MainLoop::new().expect("Failed to create mainloop");
+
+    let device = DeadBeef::conf_get_str("pipewirerust_soundcard", "default");
+
+    let mut props = properties! {
+        *pipewire::keys::MEDIA_TYPE => "Audio",
+        *pipewire::keys::MEDIA_TYPE => "Audio",
+        *pipewire::keys::MEDIA_CATEGORY => "Playback",
+        *pipewire::keys::MEDIA_ROLE => "Music",
+        *pipewire::keys::NODE_NAME => "DeadBeef [rust]",
+        *pipewire::keys::APP_NAME => "DeadBeef [rust]",
+        *pipewire::keys::APP_ID => "music.player.deadbeef",
+    };
+
+    let s = format!("1/{}", unsafe {PLUGIN.unwrap().fmt.samplerate});
+    props.insert("node.rate", &s);
+
+    if !device.eq("default") {
+        props.insert(*pipewire::keys::NODE_TARGET, &device);
+    }
+
+    let stream = pipewire::stream::Stream::<i32>::with_user_data(
+        &mainloop,
+        "deadbeef",
+        props,
+        0,
+    )
+    .state_changed(|old, new| {
+        println!("State changed: {:?} -> {:?}", old, new);
+    })
+    .process(move |stream, _user_data| {
+        match stream.dequeue_buffer() {
+            None => println!("No buffer received"),
+            Some(mut buffer) => {
+                let datas = buffer.datas_mut();
+                if let Some(d) = datas[0].data() {
+
+                    let bytesread = if DeadBeef::streamer_ok_to_read(-1) > 0 {
+                        DeadBeef::streamer_read(d.as_mut_ptr() as *mut c_void, 4096)
+                    } else {
+                        stream.flush(false).expect("");
+                        0
+                    };
+
+                    *datas[0].chunk_mut().size_mut() = bytesread as u32;
+                    *datas[0].chunk_mut().offset_mut() = 0;
+                    *datas[0].chunk_mut().stride_mut() = 1;
+                }
+            }
+        };
+    })
+    .control_info(|id, control_ptr: *const pipewire::sys::pw_stream_control| {
+        if id == libspa_sys::SPA_PROP_channelVolumes {
+            unsafe {
+                let control = *control_ptr;
+                let values = std::slice::from_raw_parts(control.values, control.n_values as usize);
+                DeadBeef::volume_set_amp(values[0]);
+            }
+        }
+    })
+    .create()
+    .expect("Error creating stream!");
+
+    // let mut buffer = [0;1024];
+    let mut buffer = vec![0; 1024];
+    let fmtpod = {
+        let fmt = unsafe {PLUGIN.unwrap().fmt};
+        let format = db_format_to_pipewire(fmt);
+        let channels = fmt.channels as u32;
+        let rate = fmt.samplerate as u32;
+
+        //create_audio_format_pod(format, channels, rate)
+        create_audio_format_pod_rust(format, channels, rate, &mut buffer)
+    };
+
+    stream
+        .connect(
+            pipewire::spa::Direction::Output,
+            None,
+            stream::StreamFlags::AUTOCONNECT
+                | stream::StreamFlags::MAP_BUFFERS
+                | stream::StreamFlags::RT_PROCESS,
+            &mut [fmtpod],
+        )
+        .expect("Error connecting stream!");
+
+    // When we receive a `Terminate` message, quit the main loop.
+    let _receiver = pw_receiver.attach(&mainloop, {
+        let mainloop = mainloop.clone();
+        move |msg| {
+            match msg {
+                PwThreadMessage::Terminate => mainloop.quit(),
+                PwThreadMessage::Pause => stream.set_active(false).unwrap(),
+                PwThreadMessage::Unpause => stream.set_active(true).unwrap(),
+                PwThreadMessage::Flush => {
+                    stream.flush(false).expect("Cannot flush stream!");
+                },
+                PwThreadMessage::SetFmt { format, channels, rate } => {
+                    unsafe {
+                        if let Some(_requested_fmt) = REQUESTED_FMT {
+                            PLUGIN.as_mut().unwrap().fmt = _requested_fmt;
+                        }
+                    }
+
+                    if stream.disconnect().is_ok() {
+
+                        println!("Set format called with: Format = {format}, Channels = {channels}, rate = {rate}");
+                        print_pipewire_format(format, channels, rate);
+    
+                        // let new_format = create_audio_format_pod(format, channels, rate);
+                        // let mut buffer = [0;1024];
+                        let mut buffer = vec![0; 1024];
+                        let newformatpod: *mut libspa_sys::spa_pod = create_audio_format_pod_rust(format, channels, rate, &mut buffer);
+
+                        stream
+                        .connect(
+                            pipewire::spa::Direction::Output,
+                            None,
+                            stream::StreamFlags::AUTOCONNECT
+                                | stream::StreamFlags::MAP_BUFFERS
+                                | stream::StreamFlags::RT_PROCESS,
+                            &mut [newformatpod],
+                        )
+                        .expect("Error connecting stream!");
+
+                        let s = format!("1/{}", rate);
+                        let props = properties!{
+                            "node.rate" => s
+                        };
+                        unsafe {
+                            pipewire::sys::pw_stream_update_properties(stream.as_ptr(), props.get_dict_ptr());
+                        }
+                    }
+                },
+                PwThreadMessage::SetVol { newvol } => {
+                    let values = [newvol, newvol];
+                    stream.set_control(libspa_sys::SPA_PROP_channelVolumes, &values).expect("Unable to set volume");
+                }
+            };
+        }
+    });
+
+    mainloop.run();
+
+    *RESULT_SENDER.lock().unwrap() = None;
+}
+
+pub extern "C" fn init() -> c_int {
+    println!("rustplug::init");
+
+    if let Ok(mut x) = RESULT_SENDER.lock() {
+        unsafe {
+            if let Some(plug) = PLUGIN.as_mut() {
+                if let Some(rfmt) = REQUESTED_FMT {
+                    plug.fmt = rfmt;
+                } else {
+                    plug.fmt = ddb_waveformat_t {
+                        samplerate: 44100,
+                        bps: 16,
+                        channels: 2,
+                        channelmask: 3,
+                        is_bigendian: 0,
+                        is_float: 0
+                    }
+                }
+            }
+        }
+
+        let (pw_sender, pw_receiver) = pipewire::channel::channel();
+
+        *x = Some(pw_sender);
+
+        let _pw_thread = thread::spawn(|| pw_thread_main(pw_receiver));
+
+    }
+
+    0
+}
+
+pub extern "C" fn free() -> c_int {
+    println!("rustplug::free");
+    stop();
+    *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_STOPPED;
+    0
+}
+
+pub extern "C" fn setformat(fmt: *mut ddb_waveformat_t) -> c_int {
+    println!("rustplug::setformat");
+    unsafe {
+        REQUESTED_FMT = Some(*fmt);
+        print_db_format(*fmt);
+        let pwfmt = db_format_to_pipewire(*fmt);
+        msgtopwthread(PwThreadMessage::SetFmt { format: pwfmt, channels: (*fmt).channels as u32, rate: (*fmt).samplerate as u32 });
+    }
+    0
+}
+
+pub extern "C" fn play() -> c_int {
+    println!("rustplug::play");
+    if let Ok(x) = RESULT_SENDER.lock() {
+        if (*x).is_none() {
+            drop(x);
+            init();
+        }
+    }
+    *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_PLAYING;
+    0
+}
+
+fn msgtopwthread(msg: PwThreadMessage) {
+    if let Ok(sendermtx) = RESULT_SENDER.lock() {
+        if let Some(sender) = sendermtx.as_ref() {
+            sender.send(msg).expect("Cannot send message!");
+        }
+    }
+}
+
+pub extern "C" fn stop() -> c_int {
+    println!("rustplug::stop");
+    if let Ok(mut x) = STATE.lock() {
+        *x = DDB_PLAYBACK_STATE_STOPPED;
+        msgtopwthread(PwThreadMessage::Terminate);
+    }
+    while RESULT_SENDER.lock().unwrap().is_some() {
+        thread::sleep(std::time::Duration::new(0,1000));
+    }
+    0
+}
+
+pub extern "C" fn pause() -> c_int {
+    if let Ok(x) = RESULT_SENDER.lock() {
+        if (*x).is_none() {
+            drop(x);
+            init();
+        }
+    }
+    msgtopwthread(PwThreadMessage::Pause);
+    *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_PAUSED;
+    0
+}
+
+pub extern "C" fn unpause() -> c_int {
+    if let Ok(x) = RESULT_SENDER.lock() {
+        if (*x).is_none() {
+            drop(x);
+            init();
+        }
+    }
+    if *STATE.lock().unwrap() == DDB_PLAYBACK_STATE_PAUSED {
+        msgtopwthread(PwThreadMessage::Unpause);
+        *STATE.lock().unwrap() = DDB_PLAYBACK_STATE_PLAYING;
+    }
+    0
+}
+
+pub extern "C" fn getstate() -> ddb_playback_state_t {
+    *STATE.lock().unwrap()
+}
+
+pub extern "C" fn plugin_start() -> c_int {
+    DeadBeef::log_detailed(DDB_LOG_LAYER_INFO, "Hello from rust!\n");
+    pipewire::init();
+    0
+}
+
+pub extern "C" fn plugin_stop() -> c_int {
+    unsafe {
+        pipewire::deinit();
+        PLUGIN = None;
+    }
+    0
+}
+
+pub extern "C" fn enum_soundcards(
+    callback: Option<
+        unsafe extern "C" fn(name: *const c_char, desc: *const c_char, _userdata: *mut c_void),
+    >,
+    userdata: *mut c_void,
+) {
+    let mainloop = MainLoop::new().expect("Failed to create mainloop");
+    let context = Context::new(&mainloop).expect("Failed to create context");
+    let core = context.connect(None).expect("Failed to connect to remote");
+    let registry = core.get_registry().expect("Failed to get registry");
+
+    // Register a callback to the `global` event on the registry, which notifies of any new global objects
+    // appearing on the remote.
+    // The callback will only get called as long as we keep the returned listener alive.
+    let _listener = registry
+        .add_listener_local()
+        .global(move |global| {
+            if let Some(props) = &global.props {
+                let media_class = props.get("media.class").unwrap_or("");
+                if media_class.eq("Audio/Sink") || media_class.eq("Audio/Duplex") {
+                    unsafe {
+                        let n = LossyCString::new(props.get("node.name").unwrap_or(""));
+                        let d = LossyCString::new(props.get("node.description").unwrap_or(""));
+
+                        if !n.as_bytes().is_empty() {
+                            callback.unwrap()(n.as_ptr(), d.as_ptr(), userdata);
+                        }
+                    }
+                }
+            }
+        })
+        .register();
+
+    let done = Rc::new(std::cell::Cell::new(false));
+    let pending = core.sync(0).expect("Error sync");
+    let mainloop_clone = mainloop.clone();
+    let done_clone = done.clone();
+
+    let _core = core
+        .add_listener_local()
+        .done(move |id, seq| {
+            if id == PW_ID_CORE && seq == pending {
+                done_clone.set(true);
+                mainloop_clone.quit()
+            }
+        })
+        .register();
+
+    while !done.get() {
+        mainloop.run();
+    }
+}
+
+#[allow(unused)]
+pub extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_int {
+    match msgid {
+        DB_EV_SONGSTARTED => println!("rust: song started"),
+        DB_EV_VOLUMECHANGED => {
+            msgtopwthread(PwThreadMessage::SetVol { newvol: DeadBeef::volume_get_amp() })
+        },
+        _ => return 0,
+    }
+
+    0
+}
+
+#[no_mangle]
+///
+/// # Safety
+/// This is requires since this is a plugin export function
+pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
+    api: *const DB_functions_t,
+) -> *mut DB_output_s {
+    let x = DB_output_t {
+        init: Some(init),
+        free: Some(free),
+        play: Some(play),
+        stop: Some(stop),
+        pause: Some(pause),
+        unpause: Some(unpause),
+        enum_soundcards: Some(enum_soundcards),
+        setformat: Some(setformat),
+        state: Some(getstate),
+        has_volume: 1,
+
+        fmt: ddb_waveformat_t::default(),
+
+        plugin: DB_plugin_t {
+            api_vmajor: 1,
+            api_vminor: 0,
+            version_major: 0,
+            version_minor: 1,
+            flags: DDB_PLUGIN_FLAG_LOGGING,
+            type_: DB_PLUGIN_OUTPUT as i32,
+            id: lit_cstr!("pipewirerust"),
+            name: lit_cstr!("Pipewire output plugin written in Rust"),
+            descr: lit_cstr!("This is a new Pipewire based plugin written in rust"),
+            copyright: lit_cstr!("Some copyright"),
+            website: lit_cstr!("https://saivert.com"),
+            start: Some(plugin_start),
+            stop: Some(plugin_stop),
+            message: Some(message),
+            connect: None,
+            get_actions: None,
+            exec_cmdline: None,
+            disconnect: None,
+            command: None,
+            configdialog: std::ptr::null(),
+            reserved1: 0,
+            reserved2: 0,
+            reserved3: 0,
+        },
+    };
+
+    PLUGIN = Some(x);
+
+    let plugin_ptr: *mut DB_output_t = PLUGIN.as_mut().unwrap();
+
+    DEADBEEF = Some(DeadBeef::init_from_ptr(api, plugin_ptr));
+
+    plugin_ptr
+}

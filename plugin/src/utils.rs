@@ -39,7 +39,7 @@ pub fn get_default_waveformat() -> ddb_waveformat_t {
         bps: 16,
         channels: 2,
         channelmask: 3,
-        is_bigendian: 0,
+        flags: 0,
         is_float: 0,
     }
 }

@@ -316,7 +316,7 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
     .state_changed({
         let ourdisconnect = ourdisconnect.clone();
         move |old, new| {
-            println!("State changed: {:?} -> {:?}", old, new);
+            println!("State changed: {old:?} -> {new:?}");
             match new {
                 pipewire::stream::StreamState::Error(x) => {
                     let msg = format!("Pipewire playback error: {x}");
@@ -420,7 +420,6 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
     // When we receive a `Terminate` message, quit the main loop.
     let _receiver = pw_receiver.attach(&mainloop, {
         let mainloop = mainloop.clone();
-        let buffersize = buffersize.clone();
         move |msg| {
             match msg {
                 PwThreadMessage::Terminate => {

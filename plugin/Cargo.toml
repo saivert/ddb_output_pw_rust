@@ -1,0 +1,24 @@
+[package]
+name = "deadbeef-rust-plugin"
+version = "0.1.0"
+rust-version = "1.64"
+edition = "2021"
+authors = ["Nicolai Syvertsen <saivert@saivert.com>"]
+categories = ["api-bindings", "multimedia"]
+description = "Pipewire plugin for DeadBeef"
+repository = "https://github.com/saivert/ddb_output_pw_rust"
+license = "GPL"
+readme = "README.md"
+homepage = "https://saivert.com"
+keywords = ["ffi", "deadbeef", "multimedia", "audio"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+deadbeef-sys = {path = "../deadbeef-sys"}
+lossycstring = {path = "../lossycstring"}
+#pipewire = {git = "https://gitlab.freedesktop.org/saivert/pipewire-rs", branch = "format_parsing_test", features = ["v0_3_44"]}
+#libspa-sys = {git = "https://gitlab.freedesktop.org/saivert/pipewire-rs", branch = "format_parsing_test"}
+pipewire = {path = "/home/saivert/code/pipewire-rs/pipewire", features = ["v0_3_44"]}
+libspa-sys = {path = "/home/saivert/code/pipewire-rs/libspa-sys"}
