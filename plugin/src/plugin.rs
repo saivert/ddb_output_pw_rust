@@ -284,6 +284,8 @@ fn create_audio_format_pod(format: u32, channels: u32, rate: u32, buffer: &mut [
 
 fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Receiver<PwThreadMessage>) {
     let mainloop = MainLoop::new().expect("Failed to create mainloop");
+    let context = Context::new(&mainloop).expect("Context");
+    let core = context.connect(None).expect("Core");
 
     let device = DeadBeef::conf_get_str("pipewirerust_soundcard", "default");
 
@@ -307,12 +309,20 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
     let ourdisconnect = Rc::new(Cell::new(false));
     let buffersize = Rc::new(Cell::new((init_fmt.bps/8 * init_fmt.channels * 25 * init_fmt.samplerate/1000) as usize));
 
-    let stream = match pipewire::stream::Stream::<i32>::with_user_data(
-        &mainloop,
+    let mut stream: stream::Stream<()> = match pipewire::stream::Stream::new(
+        &core,
         "deadbeef",
         props,
-        0,
-    )
+    ) {
+        Ok(a) => a,
+        Err(e) => {    
+            DeadBeef::log_detailed(DDB_LOG_LAYER_DEFAULT, format!("Pipewire: Unable to create stream, {}\n", e.to_string()).as_str());
+            DeadBeef::sendmessage(DB_EV_STOP, 0, 0, 0);
+            return;
+        }
+    };
+    
+    let _listener = stream.add_local_listener()
     .state_changed({
         let ourdisconnect = ourdisconnect.clone();
         move |old, new| {
@@ -384,15 +394,7 @@ fn pw_thread_main(init_fmt: ddb_waveformat_t, pw_receiver: pipewire::channel::Re
                 }
             }
         }
-    })
-    .create() {
-        Ok(a) => a,
-        Err(e) => {    
-            DeadBeef::log_detailed(DDB_LOG_LAYER_DEFAULT, format!("Pipewire: Unable to create stream, {}\n", e.to_string()).as_str());
-            DeadBeef::sendmessage(DB_EV_STOP, 0, 0, 0);
-            return;
-        }
-    };
+    }).register();
 
     let mut buffer = [0;1024];
     let fmtpod = {
