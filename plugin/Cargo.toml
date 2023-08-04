@@ -18,5 +18,5 @@ crate-type = ["cdylib"]
 [dependencies]
 deadbeef-sys = {path = "../deadbeef-sys"}
 lossycstring = {path = "../lossycstring"}
-pipewire = {git = "https://gitlab.freedesktop.org/saivert/pipewire-rs", branch = "format_parsing_test", features = ["v0_3_44"]}
-libspa-sys = {git = "https://gitlab.freedesktop.org/saivert/pipewire-rs", branch = "format_parsing_test"}
+pipewire = {git = "https://gitlab.freedesktop.org/saivert/pipewire-rs", branch = "misc_fixes", features = ["v0_3_44"]}
+libspa-sys = {git = "https://gitlab.freedesktop.org/saivert/pipewire-rs", branch = "misc_fixes"}

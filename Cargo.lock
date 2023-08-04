@@ -206,7 +206,7 @@ checksum = "b4668fb0ea861c1df094127ac5f1da3409a82116a4ba74fca2e58ef927159bb3"
 [[package]]
 name = "libspa"
 version = "0.6.0"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=format_parsing_test#2f02e4a58bee4f9e10d68b7839f9e7f3e36fa539"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#2f02e4a58bee4f9e10d68b7839f9e7f3e36fa539"
 dependencies = [
  "bitflags 2.3.3",
  "cc",
@@ -222,7 +222,7 @@ dependencies = [
 [[package]]
 name = "libspa-sys"
 version = "0.6.0"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=format_parsing_test#2f02e4a58bee4f9e10d68b7839f9e7f3e36fa539"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#2f02e4a58bee4f9e10d68b7839f9e7f3e36fa539"
 dependencies = [
  "bindgen 0.64.0",
  "cc",
@@ -299,7 +299,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 [[package]]
 name = "pipewire"
 version = "0.6.0"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=format_parsing_test#2f02e4a58bee4f9e10d68b7839f9e7f3e36fa539"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#2f02e4a58bee4f9e10d68b7839f9e7f3e36fa539"
 dependencies = [
  "anyhow",
  "bitflags 2.3.3",
@@ -315,7 +315,7 @@ dependencies = [
 [[package]]
 name = "pipewire-sys"
 version = "0.6.0"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=format_parsing_test#2f02e4a58bee4f9e10d68b7839f9e7f3e36fa539"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#2f02e4a58bee4f9e10d68b7839f9e7f3e36fa539"
 dependencies = [
  "bindgen 0.64.0",
  "libspa-sys",
