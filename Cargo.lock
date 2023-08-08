@@ -76,9 +76,9 @@ checksum = "630be753d4e58660abd17930c71b647fe46c27ea6b63cc59e1e3851406972e42"
 
 [[package]]
 name = "cc"
-version = "1.0.81"
+version = "1.0.82"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c6b2562119bf28c3439f7f02db99faf0aa1a8cdfe5772a2ee155d32227239f0"
+checksum = "305fe645edc1442a0fa8b6726ba61d422798d37a52e12eaecf4b022ebbb88f01"
 dependencies = [
  "libc",
 ]
@@ -206,7 +206,7 @@ checksum = "b4668fb0ea861c1df094127ac5f1da3409a82116a4ba74fca2e58ef927159bb3"
 [[package]]
 name = "libspa"
 version = "0.6.0"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#2f02e4a58bee4f9e10d68b7839f9e7f3e36fa539"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#b1605e992eba56b02a186d17d8e7cbd9d996ed7e"
 dependencies = [
  "bitflags 2.3.3",
  "cc",
@@ -222,7 +222,7 @@ dependencies = [
 [[package]]
 name = "libspa-sys"
 version = "0.6.0"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#2f02e4a58bee4f9e10d68b7839f9e7f3e36fa539"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#b1605e992eba56b02a186d17d8e7cbd9d996ed7e"
 dependencies = [
  "bindgen 0.64.0",
  "cc",
@@ -299,7 +299,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 [[package]]
 name = "pipewire"
 version = "0.6.0"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#2f02e4a58bee4f9e10d68b7839f9e7f3e36fa539"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#b1605e992eba56b02a186d17d8e7cbd9d996ed7e"
 dependencies = [
  "anyhow",
  "bitflags 2.3.3",
@@ -315,7 +315,7 @@ dependencies = [
 [[package]]
 name = "pipewire-sys"
 version = "0.6.0"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#2f02e4a58bee4f9e10d68b7839f9e7f3e36fa539"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#b1605e992eba56b02a186d17d8e7cbd9d996ed7e"
 dependencies = [
  "bindgen 0.64.0",
  "libspa-sys",
@@ -348,9 +348,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.9.1"
+version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2eae68fc220f7cf2532e4494aded17545fce192d59cd996e0fe7887f4ceb575"
+checksum = "81bc1d4caf89fac26a70747fe603c130093b53c773888797a6329091246d651a"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -360,9 +360,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.3.4"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7b6d6190b7594385f61bd3911cd1be99dfddcfc365a4160cc2ab5bff4aed294"
+checksum = "fed1ceff11a1dddaee50c9dc8e4938bd106e9d89ae372f192311e7da498e3b69"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -383,9 +383,9 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "serde"
-version = "1.0.181"
+version = "1.0.183"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d3e73c93c3240c0bda063c239298e633114c69a888c3e37ca8bb33f343e9890"
+checksum = "32ac8da02677876d532745a130fc9d8e6edfa81a269b107c5b00829b91d8eb3c"
 
 [[package]]
 name = "serde_spanned"
@@ -529,9 +529,9 @@ checksum = "579a42fc0b8e0c63b76519a339be31bed574929511fa53c1a3acae26eb258f29"
 
 [[package]]
 name = "winnow"
-version = "0.5.3"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f46aab759304e4d7b2075a9aecba26228bb073ee8c50db796b2c72c676b5d807"
+checksum = "acaaa1190073b2b101e15083c38ee8ec891b5e05cbee516521e94ec008f61e64"
 dependencies = [
  "memchr",
 ]

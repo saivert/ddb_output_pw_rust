@@ -14,6 +14,7 @@ fn main() {
         "db_log_layer_t",
         "db_plugin_type_t",
         "db_ev_t",
+        "db_tf_context_flags_t",
         "DB_.*"
     ];
     const INCLUDED_VARS: &[&str] = &[

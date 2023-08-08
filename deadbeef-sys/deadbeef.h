@@ -703,7 +703,7 @@ typedef struct ddb_fileadd_data_s {
 
 // since 1.8
 #if (DDB_API_LEVEL >= 8)
-enum {
+enum db_tf_context_flags_t {
     DDB_TF_CONTEXT_HAS_INDEX = 1,
     DDB_TF_CONTEXT_HAS_ID = 2,
     DDB_TF_CONTEXT_NO_DYNAMIC = 4, // skip dynamic fields (%playback_time%)

@@ -31,6 +31,7 @@ enum PwThreadMessage {
     Unpause,
     SetFmt { format: ddb_waveformat_t },
     SetVol { newvol: f32 },
+    SetTitle,
 }
 
 impl PlaybackThread {
@@ -167,6 +168,7 @@ impl DBOutput for OutputPlugin {
             DB_EV_VOLUMECHANGED => self.msgtothread(PwThreadMessage::SetVol {
                 newvol: DeadBeef::volume_get_amp(),
             }),
+            DB_EV_SONGCHANGED => self.msgtothread(PwThreadMessage::SetTitle),
             _ => {}
         }
     }
@@ -268,7 +270,7 @@ fn create_audio_format_pod(
     channels: u32,
     rate: u32,
     buffer: &mut [u8],
-) -> *mut libspa_sys::spa_pod {
+) -> &pipewire::spa::pod::Pod {
     unsafe {
         let mut b: libspa_sys::spa_pod_builder = std::mem::zeroed();
         b.data = buffer.as_mut_ptr() as *mut c_void;
@@ -282,11 +284,13 @@ fn create_audio_format_pod(
         };
         set_channel_map(channels, &mut audioinfo);
 
-        libspa_sys::spa_format_audio_raw_build(
+        let rawpod = libspa_sys::spa_format_audio_raw_build(
             &mut b as *mut libspa_sys::spa_pod_builder,
             libspa_sys::SPA_PARAM_EnumFormat,
             &mut audioinfo as *mut libspa_sys::spa_audio_info_raw,
-        )
+        );
+
+        pipewire::spa::pod::Pod::from_raw(rawpod)
     }
 }
 
@@ -295,27 +299,36 @@ fn pw_thread_main(
     pw_receiver: pipewire::channel::Receiver<PwThreadMessage>,
 ) {
     let mainloop = MainLoop::new().expect("Failed to create mainloop");
+    let client_props = properties! {
+        *pipewire::keys::APP_NAME => "DeadBeef",
+        *pipewire::keys::APP_ID => "music.player.deadbeef",
+        *pipewire::keys::APP_ICON_NAME => "deadbeef"
+    };
     let context = Context::new(&mainloop).expect("Context");
-    let core = context.connect(None).expect("Core");
+    let core = context.connect(Some(client_props)).expect("Core");
 
     let device = DeadBeef::conf_get_str("pipewirerust_soundcard", "default");
 
     let mut props = properties! {
-        *pipewire::keys::MEDIA_TYPE => "Audio",
         *pipewire::keys::MEDIA_TYPE => "Audio",
         *pipewire::keys::MEDIA_CATEGORY => "Playback",
         *pipewire::keys::MEDIA_ROLE => "Music",
         *pipewire::keys::NODE_NAME => "DeadBeef",
         *pipewire::keys::APP_NAME => "DeadBeef",
         *pipewire::keys::APP_ID => "music.player.deadbeef",
+        *pipewire::keys::APP_ICON_NAME => "deadbeef",
         "node.latency" => "1200/48000",
     };
 
     let s = format!("1/{}", init_fmt.samplerate);
-    props.insert("node.rate", &s);
+    props.insert("node.rate", s);
 
     if !device.eq("default") {
-        props.insert(*pipewire::keys::TARGET_OBJECT, &device);
+        props.insert(*pipewire::keys::TARGET_OBJECT, device);
+    }
+
+    if let Ok(media_name) = DeadBeef::titleformat("[%artist% - ]%title%") {
+        props.insert(*pipewire::keys::MEDIA_NAME, media_name);
     }
 
     let ourdisconnect = Rc::new(Cell::new(false));
@@ -466,7 +479,7 @@ fn pw_thread_main(
                         print_pipewire_format(pwfmt, channels, samplerate);
 
                         let mut buffer = [0; 1024];
-                        let newformatpod: *mut libspa_sys::spa_pod =
+                        let newformatpod =
                             create_audio_format_pod(pwfmt, channels, samplerate, &mut buffer);
                         fmt.set(format);
 
@@ -494,12 +507,8 @@ fn pw_thread_main(
                             "node.rate" => rs,
                             "node.latency" => "1200/48000",
                         };
-                        unsafe {
-                            pipewire::sys::pw_stream_update_properties(
-                                stream.as_ptr(),
-                                props.get_dict_ptr(),
-                            );
-                        }
+                        update_stream_props(&stream, &props);
+
                     }
                 }
                 PwThreadMessage::SetVol { newvol } => {
@@ -507,6 +516,15 @@ fn pw_thread_main(
                     stream
                         .set_control(libspa_sys::SPA_PROP_channelVolumes, &values)
                         .expect("Unable to set volume");
+                },
+                PwThreadMessage::SetTitle => {
+                    if let Ok(media_name) = DeadBeef::titleformat("[%artist% - ]%title%") {
+                        let props = properties! {
+                            *pipewire::keys::MEDIA_NAME => media_name,
+                        };
+                        update_stream_props(&stream, &props);
+                    }
+                
                 }
             };
         }
