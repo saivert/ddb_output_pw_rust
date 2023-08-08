@@ -11,11 +11,9 @@ fn main() {
         "playback_order_t",
         "playback_mode_t",
         "ddb_plugin_flag_t",
-        "db_log_layer_t",
-        "db_plugin_type_t",
-        "db_ev_t",
-        "db_tf_context_flags_t",
-        "DB_.*"
+        "db_.*_t",
+        "DB_.*",
+        "DDB_.*"
     ];
     const INCLUDED_VARS: &[&str] = &[
         "DB_.*",
