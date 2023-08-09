@@ -31,7 +31,7 @@ enum PwThreadMessage {
     Unpause,
     SetFmt { format: ddb_waveformat_t },
     SetVol { newvol: f32 },
-    SetTitle,
+    SetTitle(String),
 }
 
 impl PlaybackThread {
@@ -168,7 +168,11 @@ impl DBOutput for OutputPlugin {
             DB_EV_VOLUMECHANGED => self.msgtothread(PwThreadMessage::SetVol {
                 newvol: DeadBeef::volume_get_amp(),
             }),
-            DB_EV_SONGCHANGED => self.msgtothread(PwThreadMessage::SetTitle),
+            DB_EV_SONGCHANGED => {
+                if let Ok(media_name) = DeadBeef::titleformat("[%artist% - ]%title%") {
+                    self.msgtothread(PwThreadMessage::SetTitle(media_name))
+                }
+            },
             _ => {}
         }
     }
@@ -517,14 +521,11 @@ fn pw_thread_main(
                         .set_control(libspa_sys::SPA_PROP_channelVolumes, &values)
                         .expect("Unable to set volume");
                 },
-                PwThreadMessage::SetTitle => {
-                    if let Ok(media_name) = DeadBeef::titleformat("[%artist% - ]%title%") {
-                        let props = properties! {
-                            *pipewire::keys::MEDIA_NAME => media_name,
-                        };
-                        update_stream_props(&stream, &props);
-                    }
-                
+                PwThreadMessage::SetTitle(title) => {
+                    let props = properties! {
+                        *pipewire::keys::MEDIA_NAME => title,
+                    };
+                    update_stream_props(&stream, &props);
                 }
             };
         }

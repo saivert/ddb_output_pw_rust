@@ -6,6 +6,7 @@ edition = "2021"
 
 [dependencies]
 lossycstring = {path = "../lossycstring"}
+thiserror = "1"
 
 [build-dependencies]
 bindgen = {version = "0.59.0", default-features = false}
