@@ -7,6 +7,8 @@
 use lossycstring::LossyCString;
 
 use std::ffi::c_void;
+use std::ptr;
+use thiserror::Error;
 
 static mut DEADBEEF: Option<DeadBeef> = None;
 static mut DEADBEEF_THREAD_ID: Option<std::thread::ThreadId> = None;
@@ -41,9 +43,22 @@ pub trait DBOutput: DBPlugin {
     fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32);
     fn enum_soundcards<F>(&self, callback: F) where F: Fn(&str, &str) + 'static;
 }
+#[derive(Error, Debug)]
 pub enum DB_TF_Error {
+    #[error("Compile error")]
     CompileError,
-    EvalError
+    #[error("Evaluation error")]
+    EvalError,
+    #[error(transparent)]
+    DBError(#[from] DB_Error),
+}
+
+#[derive(Error, Debug)]
+pub enum DB_Error {
+    #[error("Creation failed")]
+    CreationFailed,
+    #[error("No memory")]
+    NoMemory,
 }
 
 impl DeadBeef {
@@ -65,6 +80,22 @@ impl DeadBeef {
         match DEADBEEF {
             Some(ref mut w) => w,
             None => panic!("Plugin wasn't initialized correctly"),
+        }
+    }
+
+    pub(crate) fn check_thread() {
+        let deadbeef_thread_id = unsafe {
+            DEADBEEF_THREAD_ID.as_ref().expect(
+                "DeadBeef main thread ID wasn't found, plugin \
+                 wasn't correctly initialized",
+            )
+        };
+
+        if std::thread::current().id() != *deadbeef_thread_id {
+            panic!(
+                "Deadbeef methods can be only called from the main Deadbeef \
+                 thread."
+            )
         }
     }
 
@@ -135,14 +166,21 @@ impl DeadBeef {
         unsafe { volume_get_amp() }
     }
 
-    pub fn current_track() -> *mut DB_playItem_s {
+    pub fn current_track() -> Result<PlItem, DB_Error>  {
         let deadbeef = unsafe { DeadBeef::deadbeef() };
         let streamer_get_playing_track_safe = deadbeef.get().streamer_get_playing_track_safe.unwrap();
 
-        unsafe { streamer_get_playing_track_safe() }
+        let it = unsafe { streamer_get_playing_track_safe() };
+
+        PlItem::from_raw(it)
     }
 
     pub fn titleformat(format: impl Into<String>) -> Result<String, DB_TF_Error> {
+        let track = Self::current_track()?;
+        Self::titleformat_for_item(format, &track)
+    }
+    
+    pub fn titleformat_for_item(format: impl Into<String>, item: &PlItem) -> Result<String, DB_TF_Error> {
         let deadbeef = unsafe { DeadBeef::deadbeef() };
 
         let format = LossyCString::new(format.into());
@@ -161,7 +199,7 @@ impl DeadBeef {
             let mut ctx = ddb_tf_context_t {
                 _size: std::mem::size_of::<ddb_tf_context_t>() as i32,
                 flags: DDB_TF_CONTEXT_NO_DYNAMIC,
-                it: Self::current_track(),
+                it: item.as_ptr(),
                 ..Default::default()
             };
             if tf_eval(&mut ctx as *mut _, tf, buf.as_mut_ptr() as *mut i8, 4096) <= 0 {
@@ -176,4 +214,35 @@ impl DeadBeef {
     }
 
 
+}
+
+
+pub struct PlItem {
+    ptr: ptr::NonNull<DB_playItem_s>,
+}
+
+impl PlItem {
+    pub fn from_raw(fromptr: *mut DB_playItem_s) -> Result<Self, DB_Error> {
+        let ptr: ptr::NonNull<DB_playItem_s> = ptr::NonNull::new(fromptr).ok_or(DB_Error::CreationFailed)?;
+        Ok(Self {
+            ptr,
+        })
+    }
+
+    pub fn pl_item_unref(item: *mut DB_playItem_s) {
+        let deadbeef = unsafe { DeadBeef::deadbeef() };
+        let pl_item_unref = deadbeef.get().pl_item_unref.unwrap();
+
+        unsafe { pl_item_unref(item); }
+    }
+
+    fn as_ptr(&self) -> *mut DB_playItem_s {
+        self.ptr.as_ptr()
+    }
+}
+
+impl std::ops::Drop for PlItem {
+    fn drop(&mut self) {
+        PlItem::pl_item_unref(self.ptr.as_ptr());
+    }
 }
