@@ -4,9 +4,9 @@ version = 3
 
 [[package]]
 name = "aho-corasick"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43f6cb1bf222025340178f382c426f13757b2960e89779dfcb319c32542a5a41"
+checksum = "86b8f9420f797f2d9e935edf629310eb938a0d839f984e25327f3c7eed22300c"
 dependencies = [
  "memchr",
 ]
@@ -207,7 +207,7 @@ checksum = "b4668fb0ea861c1df094127ac5f1da3409a82116a4ba74fca2e58ef927159bb3"
 [[package]]
 name = "libspa"
 version = "0.6.0"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#b1605e992eba56b02a186d17d8e7cbd9d996ed7e"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#46bfbd8bdf0ad3ff1d25d02b2e36f97333c78e23"
 dependencies = [
  "bitflags 2.3.3",
  "cc",
@@ -223,7 +223,7 @@ dependencies = [
 [[package]]
 name = "libspa-sys"
 version = "0.6.0"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#b1605e992eba56b02a186d17d8e7cbd9d996ed7e"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#46bfbd8bdf0ad3ff1d25d02b2e36f97333c78e23"
 dependencies = [
  "bindgen 0.64.0",
  "cc",
@@ -300,7 +300,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 [[package]]
 name = "pipewire"
 version = "0.6.0"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#b1605e992eba56b02a186d17d8e7cbd9d996ed7e"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#46bfbd8bdf0ad3ff1d25d02b2e36f97333c78e23"
 dependencies = [
  "anyhow",
  "bitflags 2.3.3",
@@ -316,7 +316,7 @@ dependencies = [
 [[package]]
 name = "pipewire-sys"
 version = "0.6.0"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#b1605e992eba56b02a186d17d8e7cbd9d996ed7e"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#46bfbd8bdf0ad3ff1d25d02b2e36f97333c78e23"
 dependencies = [
  "bindgen 0.64.0",
  "libspa-sys",

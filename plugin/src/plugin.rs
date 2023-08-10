@@ -270,32 +270,28 @@ fn set_channel_map(channels: u32, audioinfo: &mut libspa_sys::spa_audio_info_raw
 }
 
 fn create_audio_format_pod(
-    format: u32,
+    format: pipewire::spa::param::audio::AudioFormat,
     channels: u32,
     rate: u32,
-    buffer: &mut [u8],
+    buffer: &mut Vec<u8>,
 ) -> &pipewire::spa::pod::Pod {
-    unsafe {
-        let mut b: libspa_sys::spa_pod_builder = std::mem::zeroed();
-        b.data = buffer.as_mut_ptr() as *mut c_void;
-        b.size = buffer.len() as u32;
-        let mut audioinfo = libspa_sys::spa_audio_info_raw {
-            format,
-            flags: 0,
-            rate,
-            channels,
-            position: [libspa_sys::SPA_AUDIO_CHANNEL_UNKNOWN; 64],
-        };
-        set_channel_map(channels, &mut audioinfo);
+    let mut audio_info = pipewire::spa::param::audio::AudioInfoRaw::new();
+    audio_info.set_format(format);
+    audio_info.set_rate(rate);
+    audio_info.set_channels(channels);
 
-        let rawpod = libspa_sys::spa_format_audio_raw_build(
-            &mut b as *mut libspa_sys::spa_pod_builder,
-            libspa_sys::SPA_PARAM_EnumFormat,
-            &mut audioinfo as *mut libspa_sys::spa_audio_info_raw,
-        );
+    let values = pipewire::spa::pod::serialize::PodSerializer::serialize(
+        std::io::Cursor::new(buffer),
+        &pipewire::spa::pod::Value::Object(pipewire::spa::pod::Object {
+            type_: libspa_sys::SPA_TYPE_OBJECT_Format,
+            id: libspa_sys::SPA_PARAM_EnumFormat,
+            properties: audio_info.into(),
+        }),
+    )
+    .unwrap()
+    .0.into_inner();
 
-        pipewire::spa::pod::Pod::from_raw(rawpod)
-    }
+    pipewire::spa::pod::Pod::from_bytes(values).unwrap()
 }
 
 fn pw_thread_main(
@@ -437,7 +433,7 @@ fn pw_thread_main(
         )
         .register();
 
-    let mut buffer = [0; 1024];
+    let mut buffer: Vec<u8> = Vec::new();
     let fmtpod = {
         let fmt = init_fmt;
         let format = db_format_to_pipewire(fmt);
@@ -451,7 +447,7 @@ fn pw_thread_main(
         pipewire::spa::Direction::Output,
         None,
         StreamFlags::AUTOCONNECT | StreamFlags::MAP_BUFFERS | StreamFlags::RT_PROCESS,
-        &mut [fmtpod],
+        &mut [&fmtpod],
     ) {
         DeadBeef::log_detailed(
             DDB_LOG_LAYER_DEFAULT,
@@ -482,7 +478,7 @@ fn pw_thread_main(
                         let samplerate = format.samplerate as u32;
                         print_pipewire_format(pwfmt, channels, samplerate);
 
-                        let mut buffer = [0; 1024];
+                        let mut buffer: Vec<u8> = Vec::new();
                         let newformatpod =
                             create_audio_format_pod(pwfmt, channels, samplerate, &mut buffer);
                         fmt.set(format);
@@ -494,7 +490,7 @@ fn pw_thread_main(
                                 StreamFlags::AUTOCONNECT
                                     | StreamFlags::MAP_BUFFERS
                                     | StreamFlags::RT_PROCESS,
-                                &mut [newformatpod],
+                                &mut [&newformatpod],
                             )
                             .is_err()
                         {

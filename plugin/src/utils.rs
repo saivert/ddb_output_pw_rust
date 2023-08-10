@@ -1,17 +1,17 @@
-use pipewire::{prelude::*, Properties};
+use pipewire::{prelude::*, Properties, spa::param::audio::AudioFormat};
 
 use crate::ddb_waveformat_t;
 
-pub fn db_format_to_pipewire(input: ddb_waveformat_t) -> u32 {
+pub fn db_format_to_pipewire(input: ddb_waveformat_t) -> AudioFormat {
     match input.bps {
-        8 => libspa_sys::SPA_AUDIO_FORMAT_S8,
-        16 => libspa_sys::SPA_AUDIO_FORMAT_S16_LE,
-        24 => libspa_sys::SPA_AUDIO_FORMAT_S24_LE,
+        8 => AudioFormat::S8,
+        16 => AudioFormat::S16LE,
+        24 => AudioFormat::S24LE,
         32 => match input.is_float == 1 {
-            true => libspa_sys::SPA_AUDIO_FORMAT_F32_LE,
-            false => libspa_sys::SPA_AUDIO_FORMAT_S32_LE,
+            true => AudioFormat::F32LE,
+            false => AudioFormat::S32LE,
         },
-        _ => libspa_sys::SPA_AUDIO_FORMAT_UNKNOWN,
+        _ => AudioFormat::Unknown,
     }
 }
 
@@ -25,15 +25,15 @@ pub fn print_db_format(input: ddb_waveformat_t) {
     );
 }
 
-pub fn print_pipewire_format(format: u32, channels: u32, rate: u32) {
+pub fn print_pipewire_format(format: AudioFormat, channels: u32, rate: u32) {
     println!(
         "pw format: {}, {} channels, {} kHz",
         match format {
-            libspa_sys::SPA_AUDIO_FORMAT_S8 => "8 bps",
-            libspa_sys::SPA_AUDIO_FORMAT_S16_LE => "16 bps",
-            libspa_sys::SPA_AUDIO_FORMAT_S24_LE => "24 bps",
-            libspa_sys::SPA_AUDIO_FORMAT_F32_LE => "32 bps float",
-            libspa_sys::SPA_AUDIO_FORMAT_S32_LE => "32 bps",
+            AudioFormat::S8 => "8 bps",
+            AudioFormat::S16LE => "16 bps",
+            AudioFormat::S24LE => "24 bps",
+            AudioFormat::F32LE => "32 bps float",
+            AudioFormat::S32LE => "32 bps",
             _ => "unknown bps",
         },
         channels,
@@ -55,7 +55,7 @@ pub fn get_default_waveformat() -> ddb_waveformat_t {
 
 pub fn update_stream_props(stream: &pipewire::stream::Stream, props: &Properties) {
     unsafe {
-        pipewire::sys::pw_stream_update_properties(stream.as_ptr(), props.get_dict_ptr());
+        pipewire::sys::pw_stream_update_properties(stream.as_raw_ptr(), props.get_dict_ptr());
     }
 }
 
