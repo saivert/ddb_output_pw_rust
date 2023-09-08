@@ -20,3 +20,8 @@ deadbeef-sys = {path = "../deadbeef-sys"}
 lossycstring = {path = "../lossycstring"}
 pipewire = {git = "https://gitlab.freedesktop.org/saivert/pipewire-rs", branch = "misc_fixes", features = ["v0_3_44"]}
 libspa-sys = {git = "https://gitlab.freedesktop.org/saivert/pipewire-rs", branch = "misc_fixes"}
+#pipewire = {version = "0.7", features = ["v0_3_44"]}
+#libspa-sys = "0.7"
+
+#pipewire = {path = "/home/saivert/code/pipewire-rs/pipewire", features = ["v0_3_65"]}
+#libspa-sys = {path = "/home/saivert/code/pipewire-rs/libspa-sys"}

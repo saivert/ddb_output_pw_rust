@@ -225,48 +225,51 @@ impl DBOutput for OutputPlugin {
     }
 }
 
-fn set_channel_map(channels: u32, audioinfo: &mut libspa_sys::spa_audio_info_raw) {
+fn make_channel_map(channels: u32) -> [u32; 64] {
+    let mut position = [0; 64];
     if channels == 1 {
-        audioinfo.position[0] = libspa_sys::SPA_AUDIO_CHANNEL_MONO;
+        position[0] = libspa_sys::SPA_AUDIO_CHANNEL_MONO;
     }
     if channels >= 2 {
-        audioinfo.position[0] = libspa_sys::SPA_AUDIO_CHANNEL_FL;
-        audioinfo.position[1] = libspa_sys::SPA_AUDIO_CHANNEL_FR;
+        position[0] = libspa_sys::SPA_AUDIO_CHANNEL_FL;
+        position[1] = libspa_sys::SPA_AUDIO_CHANNEL_FR;
     }
     if channels >= 3 {
-        audioinfo.position[2] = libspa_sys::SPA_AUDIO_CHANNEL_FC;
+        position[2] = libspa_sys::SPA_AUDIO_CHANNEL_FC;
     }
     if channels >= 4 {
-        audioinfo.position[3] = libspa_sys::SPA_AUDIO_CHANNEL_LFE;
+        position[3] = libspa_sys::SPA_AUDIO_CHANNEL_LFE;
     }
     if channels >= 6 {
-        audioinfo.position[4] = libspa_sys::SPA_AUDIO_CHANNEL_RL;
-        audioinfo.position[5] = libspa_sys::SPA_AUDIO_CHANNEL_RR;
+        position[4] = libspa_sys::SPA_AUDIO_CHANNEL_RL;
+        position[5] = libspa_sys::SPA_AUDIO_CHANNEL_RR;
     }
     if channels >= 8 {
-        audioinfo.position[6] = libspa_sys::SPA_AUDIO_CHANNEL_FLC;
-        audioinfo.position[7] = libspa_sys::SPA_AUDIO_CHANNEL_FRC;
+        position[6] = libspa_sys::SPA_AUDIO_CHANNEL_FLC;
+        position[7] = libspa_sys::SPA_AUDIO_CHANNEL_FRC;
     }
     if channels >= 9 {
-        audioinfo.position[8] = libspa_sys::SPA_AUDIO_CHANNEL_RC;
+        position[8] = libspa_sys::SPA_AUDIO_CHANNEL_RC;
     }
     if channels >= 11 {
-        audioinfo.position[9] = libspa_sys::SPA_AUDIO_CHANNEL_SL;
-        audioinfo.position[10] = libspa_sys::SPA_AUDIO_CHANNEL_SR;
+        position[9] = libspa_sys::SPA_AUDIO_CHANNEL_SL;
+        position[10] = libspa_sys::SPA_AUDIO_CHANNEL_SR;
     }
     if channels >= 12 {
-        audioinfo.position[11] = libspa_sys::SPA_AUDIO_CHANNEL_TC;
+        position[11] = libspa_sys::SPA_AUDIO_CHANNEL_TC;
     }
     if channels >= 15 {
-        audioinfo.position[12] = libspa_sys::SPA_AUDIO_CHANNEL_TFL;
-        audioinfo.position[13] = libspa_sys::SPA_AUDIO_CHANNEL_TFC;
-        audioinfo.position[14] = libspa_sys::SPA_AUDIO_CHANNEL_TFR;
+        position[12] = libspa_sys::SPA_AUDIO_CHANNEL_TFL;
+        position[13] = libspa_sys::SPA_AUDIO_CHANNEL_TFC;
+        position[14] = libspa_sys::SPA_AUDIO_CHANNEL_TFR;
     }
     if channels >= 18 {
-        audioinfo.position[15] = libspa_sys::SPA_AUDIO_CHANNEL_TRL;
-        audioinfo.position[16] = libspa_sys::SPA_AUDIO_CHANNEL_TRC;
-        audioinfo.position[17] = libspa_sys::SPA_AUDIO_CHANNEL_TRR;
+        position[15] = libspa_sys::SPA_AUDIO_CHANNEL_TRL;
+        position[16] = libspa_sys::SPA_AUDIO_CHANNEL_TRC;
+        position[17] = libspa_sys::SPA_AUDIO_CHANNEL_TRR;
     }
+
+    position
 }
 
 fn create_audio_format_pod(
@@ -279,6 +282,8 @@ fn create_audio_format_pod(
     audio_info.set_format(format);
     audio_info.set_rate(rate);
     audio_info.set_channels(channels);
+
+    audio_info.set_position(make_channel_map(channels));
 
     let values = pipewire::spa::pod::serialize::PodSerializer::serialize(
         std::io::Cursor::new(buffer),
