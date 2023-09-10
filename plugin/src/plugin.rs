@@ -13,7 +13,7 @@ use pipewire::{
 pub struct OutputPlugin {
     plugin: DB_output_t,
 
-    state: ddb_playback_state_e,
+    state: PlaybackState,
     thread: Option<PlaybackThread>,
 
     requested_fmt: Option<ddb_waveformat_t>,
@@ -29,7 +29,7 @@ enum PwThreadMessage {
     Terminate,
     Pause,
     Unpause,
-    SetFmt { format: ddb_waveformat_t },
+    SetFmt { format: ddb_waveformat_t, state: PlaybackState },
     SetVol { newvol: f32 },
     SetTitle(String),
 }
@@ -58,7 +58,7 @@ impl DBPlugin for OutputPlugin {
     fn new(plugin: DB_output_t) -> Self {
         Self {
             plugin,
-            state: DDB_PLAYBACK_STATE_STOPPED,
+            state: PlaybackState::Stopped,
             thread: None,
             requested_fmt: None,
         }
@@ -95,7 +95,7 @@ impl DBOutput for OutputPlugin {
 
         self.thread = Some(PlaybackThread::new(self.plugin.fmt));
 
-        self.state = DDB_PLAYBACK_STATE_STOPPED;
+        self.state = PlaybackState::Stopped;
         0
     }
 
@@ -103,7 +103,7 @@ impl DBOutput for OutputPlugin {
         if self.thread.is_none() {
             self.init();
         }
-        self.state = DDB_PLAYBACK_STATE_PLAYING;
+        self.state = PlaybackState::Playing;
     }
 
     fn stop(&mut self) {
@@ -116,7 +116,7 @@ impl DBOutput for OutputPlugin {
                 }
             }
         }
-        self.state = DDB_PLAYBACK_STATE_STOPPED;
+        self.state = PlaybackState::Stopped;
         self.thread = None;
     }
 
@@ -130,21 +130,21 @@ impl DBOutput for OutputPlugin {
         }
 
         self.msgtothread(PwThreadMessage::Pause);
-        self.state = DDB_PLAYBACK_STATE_PAUSED;
+        self.state = PlaybackState::Paused;
     }
 
     fn unpause(&mut self) {
         if self.thread.is_none() {
             self.init();
         }
-        if self.state == DDB_PLAYBACK_STATE_PAUSED {
+        if self.state == PlaybackState::Paused {
             self.msgtothread(PwThreadMessage::Unpause);
-            self.state = DDB_PLAYBACK_STATE_PLAYING;
+            self.state = PlaybackState::Playing;
         }
     }
 
     fn getstate(&self) -> ddb_playback_state_e {
-        self.state
+        self.state.as_raw()
     }
 
     fn setformat(&mut self, fmt: ddb_waveformat_t) {
@@ -159,7 +159,7 @@ impl DBOutput for OutputPlugin {
         };
         self.requested_fmt = Some(self.plugin.fmt);
         print_db_format(fmt);
-        self.msgtothread(PwThreadMessage::SetFmt { format: fmt });
+        self.msgtothread(PwThreadMessage::SetFmt { format: fmt, state: self.state });
     }
 
     #[allow(unused)]
@@ -378,8 +378,15 @@ fn pw_thread_main(
         })
         .process({
             let fmt = fmt.clone();
+            let ourdisconnect = ourdisconnect.clone();
             move |stream, _| {
                 let fmt = fmt.get();
+
+                // This prevents glitches during format changes
+                if ourdisconnect.get() {
+                    return;
+                }
+
                 match stream.dequeue_buffer() {
                     None => println!("No buffer received"),
                     Some(mut buffer) => {
@@ -473,9 +480,8 @@ fn pw_thread_main(
                 }
                 PwThreadMessage::Pause => stream.set_active(false).unwrap(),
                 PwThreadMessage::Unpause => stream.set_active(true).unwrap(),
-                PwThreadMessage::SetFmt { format } => {
+                PwThreadMessage::SetFmt { format, state } => {
                     ourdisconnect.set(true);
-                    // stream.set_active(false).unwrap();
                     if stream.disconnect().is_ok() {
                         print!("Set format called with: ");
                         let pwfmt = db_format_to_pipewire(format);
@@ -488,13 +494,19 @@ fn pw_thread_main(
                             create_audio_format_pod(pwfmt, channels, samplerate, &mut buffer);
                         fmt.set(format);
 
+                        let mut flags = StreamFlags::AUTOCONNECT
+                            | StreamFlags::MAP_BUFFERS
+                            | StreamFlags::RT_PROCESS;
+
+                        if state != PlaybackState::Playing {
+                            flags |= StreamFlags::INACTIVE
+                        };
+
                         if stream
                             .connect(
                                 pipewire::spa::Direction::Output,
                                 None,
-                                StreamFlags::AUTOCONNECT
-                                    | StreamFlags::MAP_BUFFERS
-                                    | StreamFlags::RT_PROCESS,
+                                flags,
                                 &mut [&newformatpod],
                             )
                             .is_err()

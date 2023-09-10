@@ -246,3 +246,35 @@ impl std::ops::Drop for PlItem {
         PlItem::pl_item_unref(self.ptr.as_ptr());
     }
 }
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct PlaybackState(ddb_playback_state_e);
+
+impl PlaybackState {
+    pub const Playing: Self = Self(DDB_PLAYBACK_STATE_PLAYING);
+    pub const Stopped: Self = Self(DDB_PLAYBACK_STATE_STOPPED);
+    pub const Paused: Self = Self(DDB_PLAYBACK_STATE_PAUSED);
+
+    pub fn from_raw(raw: ddb_playback_state_e) -> Self {
+        Self(raw)
+    }
+
+    pub fn as_raw(&self) -> ddb_playback_state_e {
+        self.0
+    }
+}
+
+impl std::fmt::Debug for PlaybackState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = format!(
+            "PlaybackState::{}",
+            match *self {
+                Self::Playing => "Playing",
+                Self::Paused => "Paused",
+                Self::Stopped => "Stopped",
+                _ => "Unknown",
+            }
+        );
+        f.write_str(&name)
+    }
+}
