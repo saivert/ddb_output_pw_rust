@@ -55,8 +55,9 @@ static mut PLUGIN: Lazy<Mutex<OutputPlugin>> = Lazy::new(|| {
 });
 
 extern "C" fn init() -> c_int {
-    println!("rustplug::init");
-    unsafe {
+    debug!("rustplug::init");
+    unsafe
+    {
         if let Ok(p) = &mut PLUGIN.lock() {
             p.init();
         }
@@ -65,7 +66,7 @@ extern "C" fn init() -> c_int {
 }
 
 extern "C" fn free() -> c_int {
-    println!("rustplug::free");
+    debug!("rustplug::free");
     unsafe {
         if let Ok(p) = &mut PLUGIN.lock() {
             p.free();
@@ -75,7 +76,7 @@ extern "C" fn free() -> c_int {
 }
 
 extern "C" fn setformat(fmt: *mut ddb_waveformat_t) -> c_int {
-    println!("rustplug::setformat");
+    debug!("rustplug::setformat");
     unsafe {
         if let Ok(p) = &mut PLUGIN.lock() {
             p.setformat(*fmt);
@@ -85,7 +86,7 @@ extern "C" fn setformat(fmt: *mut ddb_waveformat_t) -> c_int {
 }
 
 extern "C" fn play() -> c_int {
-    println!("rustplug::play");
+    debug!("rustplug::play");
     unsafe {
         if let Ok(p) = &mut PLUGIN.lock() {
             p.play();
@@ -96,7 +97,7 @@ extern "C" fn play() -> c_int {
 
 
 extern "C" fn stop() -> c_int {
-    println!("rustplug::stop");
+    debug!("rustplug::stop");
     unsafe {
         if let Ok(p) = &mut PLUGIN.lock() {
             p.stop();
@@ -106,7 +107,7 @@ extern "C" fn stop() -> c_int {
 }
 
 extern "C" fn pause() -> c_int {
-    println!("rustplug::pause");
+    debug!("rustplug::pause");
     unsafe {
         if let Ok(p) = &mut PLUGIN.lock() {
             p.pause();
@@ -116,7 +117,7 @@ extern "C" fn pause() -> c_int {
 }
 
 extern "C" fn unpause() -> c_int {
-    println!("rustplug::unpause");
+    debug!("rustplug::unpause");
     unsafe {
         if let Ok(p) = &mut PLUGIN.lock() {
             p.unpause();

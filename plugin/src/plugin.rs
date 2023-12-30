@@ -149,7 +149,7 @@ impl DBOutput for OutputPlugin {
 
     fn setformat(&mut self, fmt: ddb_waveformat_t) {
         if fmt == self.plugin.fmt {
-            println!("Format is equal. Not requesting change.");
+            debug!("Format is equal. Not requesting change.");
             return;
         }
         self.plugin.fmt = if fmt.channels == 0 {
@@ -355,8 +355,8 @@ fn pw_thread_main(
         .add_local_listener::<()>()
         .state_changed({
             let ourdisconnect = ourdisconnect.clone();
-            move |old, new| {
-                println!("State changed: {old:?} -> {new:?}");
+            move |_old, new| {
+                debug!("State changed: {_old:?} -> {new:?}");
                 match new {
                     pipewire::stream::StreamState::Error(x) => {
                         let msg = format!("Pipewire playback error: {x}");
@@ -388,7 +388,7 @@ fn pw_thread_main(
                 }
 
                 match stream.dequeue_buffer() {
-                    None => println!("No buffer received"),
+                    None => debug!("No buffer received"),
                     Some(mut buffer) => {
                         let req = buffer.requested();
                         let datas = buffer.datas_mut();
@@ -483,7 +483,7 @@ fn pw_thread_main(
                 PwThreadMessage::SetFmt { format, state } => {
                     ourdisconnect.set(true);
                     if stream.disconnect().is_ok() {
-                        print!("Set format called with: ");
+                        debug!("Set format called with: ");
                         let pwfmt = db_format_to_pipewire(format);
                         let channels = format.channels as u32;
                         let samplerate = format.samplerate as u32;
