@@ -62,13 +62,12 @@ pub enum DB_Error {
 }
 
 impl DeadBeef {
-    pub unsafe fn init_from_ptr(api: *const DB_functions_t) -> DeadBeef {
+    pub unsafe fn init_from_ptr(api: *const DB_functions_t) {
         assert!(!api.is_null());
 
         DEADBEEF = Some(DeadBeef { ptr: api, plugin_ptr: std::ptr::null_mut() as *mut DB_plugin_t });
         DEADBEEF_THREAD_ID = Some(std::thread::current().id());
 
-        DeadBeef { ptr: api, plugin_ptr: std::ptr::null_mut() as *mut DB_plugin_t }
     }
 
     pub fn set_plugin_ptr(ptr: *mut DB_plugin_t) {
@@ -147,9 +146,9 @@ impl DeadBeef {
         let mut buf: Vec<u8> = vec![0; 4096];
 
         unsafe { conf_get_str(item.as_ptr(), default.as_ptr(), buf.as_mut_ptr() as *mut i8, 4096); }
-        let len = buf.iter().position(|&c| c == 0).expect("buffer overflow in conf_get_str");
-        buf.truncate(len);
-        String::from_utf8_lossy(&buf).to_string()
+
+        let cstr = std::ffi::CStr::from_bytes_until_nul(&buf);
+        return cstr.expect("null terminated string").to_string_lossy().to_string();
     }
 
     pub fn volume_set_amp(vol: f32) {
@@ -207,10 +206,8 @@ impl DeadBeef {
             }
             tf_free(tf);
         }
-
-        let len = buf.iter().position(|&c| c == 0).expect("buffer overflow in titleformat");
-        buf.truncate(len);
-        Ok(String::from_utf8_lossy(&buf).to_string())
+        let cstr = std::ffi::CStr::from_bytes_until_nul(&buf);
+        Ok(cstr.expect("null terminated string").to_string_lossy().to_string())
     }
 
 
