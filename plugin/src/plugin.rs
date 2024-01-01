@@ -10,8 +10,8 @@ use pipewire::{
     Context, MainLoop, PW_ID_CORE,
 };
 
-pub struct OutputPlugin {
-    plugin: DB_output_t,
+pub struct OutputPlugin<'a> {
+    plugin: &'a DB_output_t,
 
     state: PlaybackState,
     thread: Option<PlaybackThread>,
@@ -54,18 +54,18 @@ impl PlaybackThread {
     }
 }
 
-impl DBPlugin for OutputPlugin {
-    fn new(plugin: DB_output_t) -> Self {
+impl<'a> DBPluginCreate for OutputPlugin<'a> {
+    fn new(plugin: &DB_output_t) -> Self {
         Self {
-            plugin,
+            plugin: plugin,
+            requested_fmt: None,
             state: PlaybackState::Stopped,
             thread: None,
-            requested_fmt: None,
         }
     }
-    fn get_plugin_ptr(&mut self) -> *mut c_void {
-        &mut self.plugin as *mut DB_output_t as *mut c_void
-    }
+}
+
+impl DBPlugin for OutputPlugin<'_> {
 
     fn plugin_start(&mut self) {
         pipewire::init();
@@ -75,9 +75,32 @@ impl DBPlugin for OutputPlugin {
             pipewire::deinit();
         }
     }
+
+    #[allow(unused)]
+    fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32) {
+        match msgid {
+            DB_EV_VOLUMECHANGED => self.msgtothread(PwThreadMessage::SetVol {
+                newvol: DeadBeef::volume_get_amp(),
+            }),
+            DB_EV_SONGCHANGED => {
+                if let Ok(media_name) = DeadBeef::titleformat("[%artist% - ]%title%") {
+                    self.msgtothread(PwThreadMessage::SetTitle(media_name))
+                }
+            },
+            _ => {}
+        }
+    }
 }
 
-impl OutputPlugin {
+impl<'a> OutputPlugin<'a> {
+    pub fn new(plugin: &DB_output_t) -> Self {
+        Self {
+            plugin,
+            state: PlaybackState::Stopped,
+            thread: None,
+            requested_fmt: None,
+        }
+    }
     fn msgtothread(&self, msg: PwThreadMessage) {
         if let Some(s) = self.thread.as_ref() {
             s.msg(msg);
@@ -85,7 +108,7 @@ impl OutputPlugin {
     }
 }
 
-impl DBOutput for OutputPlugin {
+impl DBOutput for OutputPlugin<'_> {
     fn init(&mut self) -> i32 {
         if self.requested_fmt.is_none() {
             self.requested_fmt = Some(get_default_waveformat());
@@ -162,24 +185,7 @@ impl DBOutput for OutputPlugin {
         self.msgtothread(PwThreadMessage::SetFmt { format: fmt, state: self.state });
     }
 
-    #[allow(unused)]
-    fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32) {
-        match msgid {
-            DB_EV_VOLUMECHANGED => self.msgtothread(PwThreadMessage::SetVol {
-                newvol: DeadBeef::volume_get_amp(),
-            }),
-            DB_EV_SONGCHANGED => {
-                if let Ok(media_name) = DeadBeef::titleformat("[%artist% - ]%title%") {
-                    self.msgtothread(PwThreadMessage::SetTitle(media_name))
-                }
-            },
-            _ => {}
-        }
-    }
-
-    fn enum_soundcards<F>(&self, callback: F)
-    where
-        F: Fn(&str, &str) + 'static,
+    fn enum_soundcards<F: Fn(&str, &str) >(&mut self, callback: &'static F)
     {
         let mainloop = MainLoop::new().expect("Failed to create mainloop");
         let context = Context::new(&mainloop).expect("Failed to create context");
@@ -189,6 +195,7 @@ impl DBOutput for OutputPlugin {
         // Register a callback to the `global` event on the registry, which notifies of any new global objects
         // appearing on the remote.
         // The callback will only get called as long as we keep the returned listener alive.
+        
         let _listener = registry
             .add_listener_local()
             .global(move |global| {

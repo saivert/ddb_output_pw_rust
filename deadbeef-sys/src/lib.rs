@@ -10,7 +10,7 @@ use std::ffi::c_void;
 use std::ptr;
 use thiserror::Error;
 
-static mut DEADBEEF: Option<DeadBeef> = None;
+pub static mut DEADBEEF: Option<DeadBeef> = None;
 static mut DEADBEEF_THREAD_ID: Option<std::thread::ThreadId> = None;
 
 #[allow(deref_nullptr)]
@@ -18,17 +18,24 @@ mod api {
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 pub use api::*;
+
+mod plugin_struct;
+use plugin_struct::*;
+
 /// Main DeadBeef struct that encapsulates common DeadBeef API functions.
 pub struct DeadBeef {
     pub(crate) ptr: *const DB_functions_t,
     pub(crate) plugin_ptr: *mut DB_plugin_t,
 }
 
+pub trait DBPluginCreate {
+    fn new(plugin: &DB_output_t) -> Self;
+}
+
 pub trait DBPlugin {
-    fn new(plugin: DB_output_t) -> Self;
-    fn get_plugin_ptr(&mut self) -> *mut c_void;
     fn plugin_start(&mut self);
     fn plugin_stop(&mut self);
+    fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32);
 }
 
 pub trait DBOutput: DBPlugin {
@@ -40,8 +47,8 @@ pub trait DBOutput: DBPlugin {
     fn unpause(&mut self);
     fn getstate(&self) -> ddb_playback_state_e;
     fn setformat(&mut self, fmt: ddb_waveformat_t);
-    fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32);
-    fn enum_soundcards<F>(&self, callback: F) where F: Fn(&str, &str) + 'static;
+    //fn enum_soundcards<F>(&self, callback: F) where F: Fn(&str, &str) + 'static;
+    fn enum_soundcards(&self, callback: impl Fn(&str, &str) + 'static);
 }
 #[derive(Error, Debug)]
 pub enum DB_TF_Error {
@@ -62,12 +69,22 @@ pub enum DB_Error {
 }
 
 impl DeadBeef {
-    pub unsafe fn init_from_ptr(api: *const DB_functions_t) {
+    pub unsafe fn init_from_ptr<T>(api: *const DB_functions_t) -> *mut DB_plugin_t
+    where T: DBPluginCreate + 'static{
         assert!(!api.is_null());
 
         DEADBEEF = Some(DeadBeef { ptr: api, plugin_ptr: std::ptr::null_mut() as *mut DB_plugin_t });
         DEADBEEF_THREAD_ID = Some(std::thread::current().id());
 
+        unsafe
+        {
+            if let Ok(p) = &mut PLUGIN.lock() {
+                let plugin_struct = p.plugin_struct.get().expect("plugin_struct");
+                _ = p.plugin.set(Box::new(T::new(plugin_struct)));
+                return plugin_struct as *const DB_output_t as *const DB_plugin_t as *mut DB_plugin_t;
+            }
+        }
+        std::ptr::null_mut() as *mut DB_plugin_t
     }
 
     pub fn set_plugin_ptr(ptr: *mut DB_plugin_t) {
