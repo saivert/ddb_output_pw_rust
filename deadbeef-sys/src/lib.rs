@@ -29,6 +29,7 @@ pub trait DBPlugin {
     fn get_plugin_ptr(&mut self) -> *mut c_void;
     fn plugin_start(&mut self);
     fn plugin_stop(&mut self);
+    fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32);
 }
 
 pub trait DBOutput: DBPlugin {
@@ -40,7 +41,6 @@ pub trait DBOutput: DBPlugin {
     fn unpause(&mut self);
     fn getstate(&self) -> ddb_playback_state_e;
     fn setformat(&mut self, fmt: ddb_waveformat_t);
-    fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32);
     fn enum_soundcards<F>(&self, callback: F) where F: Fn(&str, &str) + 'static;
 }
 #[derive(Error, Debug)]

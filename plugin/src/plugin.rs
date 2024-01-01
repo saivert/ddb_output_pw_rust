@@ -75,6 +75,21 @@ impl DBPlugin for OutputPlugin {
             pipewire::deinit();
         }
     }
+
+    #[allow(unused)]
+    fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32) {
+        match msgid {
+            DB_EV_VOLUMECHANGED => self.msgtothread(PwThreadMessage::SetVol {
+                newvol: DeadBeef::volume_get_amp(),
+            }),
+            DB_EV_SONGCHANGED => {
+                if let Ok(media_name) = DeadBeef::titleformat("[%artist% - ]%title%") {
+                    self.msgtothread(PwThreadMessage::SetTitle(media_name))
+                }
+            },
+            _ => {}
+        }
+    }
 }
 
 impl OutputPlugin {
@@ -160,21 +175,6 @@ impl DBOutput for OutputPlugin {
         self.requested_fmt = Some(self.plugin.fmt);
         print_db_format(fmt);
         self.msgtothread(PwThreadMessage::SetFmt { format: fmt, state: self.state });
-    }
-
-    #[allow(unused)]
-    fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32) {
-        match msgid {
-            DB_EV_VOLUMECHANGED => self.msgtothread(PwThreadMessage::SetVol {
-                newvol: DeadBeef::volume_get_amp(),
-            }),
-            DB_EV_SONGCHANGED => {
-                if let Ok(media_name) = DeadBeef::titleformat("[%artist% - ]%title%") {
-                    self.msgtothread(PwThreadMessage::SetTitle(media_name))
-                }
-            },
-            _ => {}
-        }
     }
 
     fn enum_soundcards<F>(&self, callback: F)
