@@ -1,5 +1,6 @@
 use crate::*;
 
+use std::ffi::c_void;
 use std::rc::Rc;
 use std::{cell::Cell, thread};
 
@@ -10,8 +11,8 @@ use pipewire::{
     Context, MainLoop, PW_ID_CORE,
 };
 
-pub struct OutputPlugin<'a> {
-    plugin: &'a DB_output_t,
+pub struct OutputPlugin {
+    plugin: DB_output_t,
 
     state: PlaybackState,
     thread: Option<PlaybackThread>,
@@ -54,10 +55,10 @@ impl PlaybackThread {
     }
 }
 
-impl<'a> DBPluginCreate for OutputPlugin<'a> {
-    fn new(plugin: &DB_output_t) -> Self {
+impl DBOutputPluginCreate for OutputPlugin {
+    fn new(plugin: DB_output_t) -> Self {
         Self {
-            plugin: plugin,
+            plugin,
             requested_fmt: None,
             state: PlaybackState::Stopped,
             thread: None,
@@ -65,8 +66,10 @@ impl<'a> DBPluginCreate for OutputPlugin<'a> {
     }
 }
 
-impl DBPlugin for OutputPlugin<'_> {
-
+impl DBPlugin for OutputPlugin {
+    fn get_plugin_ptr(&self) -> *mut DB_plugin_t {
+        &self.plugin as *const DB_output_t as *mut DB_output_t as *mut DB_plugin_t
+    }
     fn plugin_start(&mut self) {
         pipewire::init();
     }
@@ -75,7 +78,6 @@ impl DBPlugin for OutputPlugin<'_> {
             pipewire::deinit();
         }
     }
-
     #[allow(unused)]
     fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32) {
         match msgid {
@@ -90,17 +92,14 @@ impl DBPlugin for OutputPlugin<'_> {
             _ => {}
         }
     }
+
+    fn as_output(&mut self) -> Option<&mut dyn DBOutput> {
+        Some(self)
+    }
+
 }
 
-impl<'a> OutputPlugin<'a> {
-    pub fn new(plugin: &DB_output_t) -> Self {
-        Self {
-            plugin,
-            state: PlaybackState::Stopped,
-            thread: None,
-            requested_fmt: None,
-        }
-    }
+impl OutputPlugin {
     fn msgtothread(&self, msg: PwThreadMessage) {
         if let Some(s) = self.thread.as_ref() {
             s.msg(msg);
@@ -108,7 +107,7 @@ impl<'a> OutputPlugin<'a> {
     }
 }
 
-impl DBOutput for OutputPlugin<'_> {
+impl DBOutput for OutputPlugin {
     fn init(&mut self) -> i32 {
         if self.requested_fmt.is_none() {
             self.requested_fmt = Some(get_default_waveformat());
@@ -185,7 +184,7 @@ impl DBOutput for OutputPlugin<'_> {
         self.msgtothread(PwThreadMessage::SetFmt { format: fmt, state: self.state });
     }
 
-    fn enum_soundcards<F: Fn(&str, &str) >(&mut self, callback: &'static F)
+    fn enum_soundcards(&self, callback: EnumSoundcard)
     {
         let mainloop = MainLoop::new().expect("Failed to create mainloop");
         let context = Context::new(&mainloop).expect("Failed to create context");
@@ -204,7 +203,7 @@ impl DBOutput for OutputPlugin<'_> {
                     if media_class.eq("Audio/Sink") || media_class.eq("Audio/Duplex") {
                         let name = props.get("node.name").unwrap_or("");
                         if !name.is_empty() {
-                            callback(name, props.get("node.description").unwrap_or(""));
+                            callback.add_card(name, props.get("node.description").unwrap_or(""));
                         }
                     }
                 }

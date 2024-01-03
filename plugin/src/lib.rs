@@ -1,16 +1,11 @@
-use std::{ffi::{c_char, c_int, c_void}, sync::Mutex};
-use once_cell::sync::Lazy;
 use deadbeef_sys::*;
 
 #[macro_use]
 mod utils;
-use lossycstring::LossyCString;
 use utils::*;
 
 mod plugin;
 use plugin::*;
-
-
 
 #[no_mangle]
 ///
@@ -19,9 +14,12 @@ use plugin::*;
 pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
     api: *const DB_functions_t,
 ) -> *mut DB_plugin_t {
-    let k = |x: i32| {};
-    k.call_once(("k"));
-    k(2);
-
-    DeadBeef::init_from_ptr::<OutputPlugin>(api)
+    DeadBeef::create_output_plugin::<OutputPlugin>(
+        api,
+        "rustplug",
+        "Pipewire output xx(rust)",
+        "Output plugin for PipeWire written in rust",
+        include_str!("../../LICENSE"),
+        "https://saivert.com",
+    )
 }

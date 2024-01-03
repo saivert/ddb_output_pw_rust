@@ -5,8 +5,10 @@
 #![allow(clippy::all)]
 
 use lossycstring::LossyCString;
+use once_cell::sync::OnceCell;
+use core::panic;
+use std::ffi::{c_char, c_void, CString};
 
-use std::ffi::c_void;
 use std::ptr;
 use thiserror::Error;
 
@@ -28,14 +30,38 @@ pub struct DeadBeef {
     pub(crate) plugin_ptr: *mut DB_plugin_t,
 }
 
-pub trait DBPluginCreate {
-    fn new(plugin: &DB_output_t) -> Self;
+pub trait DBOutputPluginCreate {
+    fn new(plugin: DB_output_t) -> Self ;
+}
+
+pub trait DBMiscPluginCreate {
+    fn new(plugin: DB_misc_t) -> Self ;
 }
 
 pub trait DBPlugin {
+    fn get_plugin_ptr(&self) -> *mut DB_plugin_t;
+
     fn plugin_start(&mut self);
     fn plugin_stop(&mut self);
     fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32);
+
+    fn as_output(&mut self) -> Option<&mut dyn DBOutput> {None}
+}
+
+pub struct EnumSoundcard {
+    callback: unsafe extern "C" fn(name: *const c_char, desc: *const c_char, _userdata: *mut c_void),
+    userdata: *mut c_void,
+}
+
+impl EnumSoundcard  {
+    pub fn add_card(&self, name: &str, description: &str) {
+        let name = LossyCString::new(name);
+        let desc = LossyCString::new(description);
+
+        unsafe {
+            (self.callback)(name.as_ptr(), desc.as_ptr(), self.userdata);
+        }
+    }
 }
 
 pub trait DBOutput: DBPlugin {
@@ -47,9 +73,9 @@ pub trait DBOutput: DBPlugin {
     fn unpause(&mut self);
     fn getstate(&self) -> ddb_playback_state_e;
     fn setformat(&mut self, fmt: ddb_waveformat_t);
-    //fn enum_soundcards<F>(&self, callback: F) where F: Fn(&str, &str) + 'static;
-    fn enum_soundcards(&self, callback: impl Fn(&str, &str) + 'static);
+    fn enum_soundcards(&self, callback: EnumSoundcard);
 }
+
 #[derive(Error, Debug)]
 pub enum DB_TF_Error {
     #[error("Compile error")]
@@ -69,21 +95,130 @@ pub enum DB_Error {
 }
 
 impl DeadBeef {
-    pub unsafe fn init_from_ptr<T>(api: *const DB_functions_t) -> *mut DB_plugin_t
-    where T: DBPluginCreate + 'static{
+    pub fn create_output_plugin<T>(api: *const DB_functions_t, id: &str, name: &str, description: &str, copyright: &str, website: &str) -> *mut DB_plugin_t
+    where T: DBOutputPluginCreate + DBPlugin + 'static {
         assert!(!api.is_null());
 
-        DEADBEEF = Some(DeadBeef { ptr: api, plugin_ptr: std::ptr::null_mut() as *mut DB_plugin_t });
-        DEADBEEF_THREAD_ID = Some(std::thread::current().id());
-
-        unsafe
-        {
-            if let Ok(p) = &mut PLUGIN.lock() {
-                let plugin_struct = p.plugin_struct.get().expect("plugin_struct");
-                _ = p.plugin.set(Box::new(T::new(plugin_struct)));
-                return plugin_struct as *const DB_output_t as *const DB_plugin_t as *mut DB_plugin_t;
-            }
+        unsafe {
+            DEADBEEF = Some(DeadBeef { ptr: api, plugin_ptr: std::ptr::null_mut() as *mut DB_plugin_t });
+            DEADBEEF_THREAD_ID = Some(std::thread::current().id());
         }
+
+        let wrapper = PluginStructWrapper {
+            id: CString::new(id).unwrap(),
+            name: CString::new(name).unwrap(),
+            description: CString::new(description).unwrap(),
+            copyright: CString::new(copyright).unwrap(),
+            website: CString::new(website).unwrap(),
+            plugin: OnceCell::default(),
+        };
+
+        let db_plugin_struct = DB_output_t {
+            init: Some(init),
+            free: Some(free),
+            play: Some(play),
+            stop: Some(stop),
+            pause: Some(pause),
+            unpause: Some(unpause),
+            enum_soundcards: Some(enum_soundcards),
+            setformat: Some(setformat),
+            state: Some(getstate),
+            has_volume: 1,
+
+            fmt: ddb_waveformat_t::default(),
+
+            plugin: DB_plugin_t {
+                api_vmajor: 1,
+                api_vminor: 0,
+                version_major: 0,
+                version_minor: 1,
+                flags: DDB_PLUGIN_FLAG_LOGGING,
+                type_: DB_PLUGIN_OUTPUT as i32,
+                id: wrapper.id.as_ptr(),
+                name: wrapper.name.as_ptr(),
+                descr: wrapper.description.as_ptr(),
+                copyright: wrapper.copyright.as_ptr(),
+                website: wrapper.website.as_ptr(),
+                start: Some(plugin_start),
+                stop: Some(plugin_stop),
+                message: Some(message),
+                connect: None,
+                get_actions: None,
+                exec_cmdline: None,
+                disconnect: None,
+                command: None,
+                configdialog: std::ptr::null(),
+                reserved1: 0,
+                reserved2: 0,
+                reserved3: 0,
+            },
+        };
+        
+        if let Ok(p) = unsafe { &mut PLUGIN.lock() } {
+            let plugin = Box::new(T::new(db_plugin_struct));
+            let ptr = plugin.get_plugin_ptr();
+            wrapper.plugin.set(plugin).expect("Not set");
+            p.set(wrapper).expect("Plugin wrapper not set");
+            return ptr;
+        }
+
+        std::ptr::null_mut() as *mut DB_plugin_t
+    }
+
+    pub fn create_misc_plugin<T>(api: *const DB_functions_t, id: &str, name: &str, description: &str, copyright: &str, website: &str) -> *mut DB_plugin_t
+    where T: DBMiscPluginCreate + DBPlugin + 'static {
+        assert!(!api.is_null());
+
+        unsafe {
+            DEADBEEF = Some(DeadBeef { ptr: api, plugin_ptr: std::ptr::null_mut() as *mut DB_plugin_t });
+            DEADBEEF_THREAD_ID = Some(std::thread::current().id());
+        }
+
+        let wrapper = PluginStructWrapper {
+            id: CString::new(id).unwrap(),
+            name: CString::new(name).unwrap(),
+            description: CString::new(description).unwrap(),
+            copyright: CString::new(copyright).unwrap(),
+            website: CString::new(website).unwrap(),
+            plugin: OnceCell::default(),
+        };
+
+        let db_plugin_struct = DB_misc_t {
+            plugin: DB_plugin_t {
+                api_vmajor: 1,
+                api_vminor: 0,
+                version_major: 0,
+                version_minor: 1,
+                flags: DDB_PLUGIN_FLAG_LOGGING,
+                type_: DB_PLUGIN_MISC as i32,
+                id: wrapper.id.as_ptr(),
+                name: wrapper.name.as_ptr(),
+                descr: wrapper.description.as_ptr(),
+                copyright: wrapper.copyright.as_ptr(),
+                website: wrapper.website.as_ptr(),
+                start: Some(plugin_start),
+                stop: Some(plugin_stop),
+                message: Some(message),
+                connect: None,
+                get_actions: None,
+                exec_cmdline: None,
+                disconnect: None,
+                command: None,
+                configdialog: std::ptr::null(),
+                reserved1: 0,
+                reserved2: 0,
+                reserved3: 0,
+            },
+        };
+        
+        if let Ok(p) = unsafe { &mut PLUGIN.lock() } {
+            let plugin = Box::new(T::new(db_plugin_struct));
+            let ptr = plugin.get_plugin_ptr();
+            wrapper.plugin.set(plugin).expect("Not set");
+            p.set(wrapper).expect("Plugin wrapper not set");
+            return ptr;
+        }
+
         std::ptr::null_mut() as *mut DB_plugin_t
     }
 
