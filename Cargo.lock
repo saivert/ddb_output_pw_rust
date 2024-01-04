@@ -12,6 +12,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "annotate-snippets"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccaf7e9dfbb6ab22c82e473cd1a8a7bd313c19a5b7e40970f3d89ef5a5c9e81e"
+dependencies = [
+ "unicode-width",
+ "yansi-term",
+]
+
+[[package]]
 name = "ansi_term"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -68,10 +78,11 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.66.1"
+version = "0.68.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b84e06fc203107bfbad243f4aba2af864eb7db3b1cf46ea0a023b0b433d2a7"
+checksum = "726e4313eb6ec35d2730258ad4e15b547ee75d6afaa1361a922e78e59b7d8078"
 dependencies = [
+ "annotate-snippets",
  "bitflags 2.4.0",
  "cexpr",
  "clang-sys",
@@ -321,8 +332,8 @@ dependencies = [
 
 [[package]]
 name = "libspa"
-version = "0.7.1"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#ffba8998c740530b0703afc473e897a07b7f95cd"
+version = "0.7.2"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#b6f7b5bf297e0695137b0bc6e44b8dc8c0649f13"
 dependencies = [
  "bitflags 2.4.0",
  "cc",
@@ -337,10 +348,10 @@ dependencies = [
 
 [[package]]
 name = "libspa-sys"
-version = "0.7.1"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#ffba8998c740530b0703afc473e897a07b7f95cd"
+version = "0.7.2"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#b6f7b5bf297e0695137b0bc6e44b8dc8c0649f13"
 dependencies = [
- "bindgen 0.66.1",
+ "bindgen 0.68.1",
  "cc",
  "system-deps",
 ]
@@ -425,8 +436,8 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pipewire"
-version = "0.7.1"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#ffba8998c740530b0703afc473e897a07b7f95cd"
+version = "0.7.2"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#b6f7b5bf297e0695137b0bc6e44b8dc8c0649f13"
 dependencies = [
  "anyhow",
  "bitflags 2.4.0",
@@ -441,10 +452,10 @@ dependencies = [
 
 [[package]]
 name = "pipewire-sys"
-version = "0.7.1"
-source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#ffba8998c740530b0703afc473e897a07b7f95cd"
+version = "0.7.2"
+source = "git+https://gitlab.freedesktop.org/saivert/pipewire-rs?branch=misc_fixes#b6f7b5bf297e0695137b0bc6e44b8dc8c0649f13"
 dependencies = [
- "bindgen 0.66.1",
+ "bindgen 0.68.1",
  "libspa-sys",
  "system-deps",
 ]
@@ -816,4 +827,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c2e3184b9c4e92ad5167ca73039d0c42476302ab603e2fec4487511f38ccefc"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "yansi-term"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe5c30ade05e61656247b2e334a031dfd0cc466fadef865bdcdea8d537951bf1"
+dependencies = [
+ "winapi",
 ]

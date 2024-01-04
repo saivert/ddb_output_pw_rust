@@ -4,10 +4,10 @@ use std::rc::Rc;
 use std::{cell::Cell, thread};
 
 use pipewire::{
-    prelude::*,
-    properties,
+    properties::properties,
     stream::{self, StreamFlags},
-    Context, MainLoop, PW_ID_CORE,
+    context::Context, main_loop::MainLoop, core::PW_ID_CORE,
+    spa::utils::Direction
 };
 
 pub struct OutputPlugin {
@@ -356,7 +356,7 @@ fn pw_thread_main(
         .add_local_listener::<()>()
         .state_changed({
             let ourdisconnect = ourdisconnect.clone();
-            move |_old, new| {
+            move |_stream, _userdata, _old, new| {
                 debug!("State changed: {_old:?} -> {new:?}");
                 match new {
                     pipewire::stream::StreamState::Error(x) => {
@@ -380,7 +380,7 @@ fn pw_thread_main(
         .process({
             let fmt = fmt.clone();
             let ourdisconnect = ourdisconnect.clone();
-            move |stream, _| {
+            move |stream, _userdata| {
                 let fmt = fmt.get();
 
                 // This prevents glitches during format changes
@@ -424,7 +424,7 @@ fn pw_thread_main(
             }
         })
         .control_info(
-            move |id, control_ptr: *const pipewire::sys::pw_stream_control| {
+            move |_stream, _userdata, id, control_ptr: *const pipewire::sys::pw_stream_control| {
                 if id == libspa_sys::SPA_PROP_channelVolumes {
                     unsafe {
                         let control = *control_ptr;
@@ -457,7 +457,7 @@ fn pw_thread_main(
     };
 
     if let Err(e) = stream.connect(
-        pipewire::spa::Direction::Output,
+        Direction::Output,
         None,
         StreamFlags::AUTOCONNECT | StreamFlags::MAP_BUFFERS | StreamFlags::RT_PROCESS,
         &mut [&fmtpod],
@@ -505,7 +505,7 @@ fn pw_thread_main(
 
                         if stream
                             .connect(
-                                pipewire::spa::Direction::Output,
+                                Direction::Output,
                                 None,
                                 flags,
                                 &mut [&newformatpod],

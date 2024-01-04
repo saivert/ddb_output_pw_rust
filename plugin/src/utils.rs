@@ -1,4 +1,4 @@
-use pipewire::{prelude::*, Properties, spa::param::audio::AudioFormat};
+use pipewire::{properties::Properties, spa::param::audio::AudioFormat};
 
 use crate::ddb_waveformat_t;
 
@@ -63,7 +63,7 @@ pub fn get_default_waveformat() -> ddb_waveformat_t {
 
 pub fn update_stream_props(stream: &pipewire::stream::Stream, props: &Properties) {
     unsafe {
-        pipewire::sys::pw_stream_update_properties(stream.as_raw_ptr(), props.get_dict_ptr());
+        pipewire::sys::pw_stream_update_properties(stream.as_raw_ptr(), props.dict().as_raw_ptr());
     }
 }
 
