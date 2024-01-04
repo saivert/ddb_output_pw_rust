@@ -146,10 +146,13 @@ extern "C" fn plugin_start() -> c_int {
 }
 
 extern "C" fn plugin_stop() -> c_int {
+    unsafe {
+        if let Ok(p) = &mut PLUGIN.lock(){
+            p.plugin_stop();
+        }
+    }
     0
 }
-
-
 
 extern "C" fn enum_soundcards(
     callback: Option<
@@ -186,11 +189,5 @@ extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_int {
 pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
     api: *const DB_functions_t,
 ) -> *mut DB_plugin_t {
-    DeadBeef::init_from_ptr(api);
-
-    let y = PLUGIN.lock().unwrap().get_plugin_ptr();
-
-    DeadBeef::set_plugin_ptr(y as *mut DB_plugin_t);
-
-    y as *mut DB_plugin_t
+    DeadBeef::init_from_ptr(api, PLUGIN.get_mut().expect("Plugin static mut being set."))
 }

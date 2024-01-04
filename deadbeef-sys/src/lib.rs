@@ -25,24 +25,9 @@ pub struct DeadBeef {
 }
 
 pub trait DBPlugin {
-    fn new(plugin: DB_output_t) -> Self;
     fn get_plugin_ptr(&mut self) -> *mut c_void;
-    fn plugin_start(&mut self);
-    fn plugin_stop(&mut self);
-    fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32);
 }
 
-pub trait DBOutput: DBPlugin {
-    fn init(&mut self) -> i32 {0}
-    fn free(&mut self);
-    fn play(&mut self);
-    fn stop(&mut self);
-    fn pause(&mut self);
-    fn unpause(&mut self);
-    fn getstate(&self) -> ddb_playback_state_e;
-    fn setformat(&mut self, fmt: ddb_waveformat_t);
-    fn enum_soundcards<F>(&self, callback: F) where F: Fn(&str, &str) + 'static;
-}
 #[derive(Error, Debug)]
 pub enum DB_TF_Error {
     #[error("Compile error")]
@@ -62,12 +47,13 @@ pub enum DB_Error {
 }
 
 impl DeadBeef {
-    pub unsafe fn init_from_ptr(api: *const DB_functions_t) {
+    pub unsafe fn init_from_ptr(api: *const DB_functions_t, plugin: &mut impl DBPlugin) -> *mut DB_plugin_t {
         assert!(!api.is_null());
-
-        DEADBEEF = Some(DeadBeef { ptr: api, plugin_ptr: std::ptr::null_mut() as *mut DB_plugin_t });
+        let ptr = plugin.get_plugin_ptr() as *mut DB_plugin_t;
+        DEADBEEF = Some(DeadBeef { ptr: api, plugin_ptr: ptr as *mut DB_plugin_t });
         DEADBEEF_THREAD_ID = Some(std::thread::current().id());
 
+        ptr
     }
 
     pub fn set_plugin_ptr(ptr: *mut DB_plugin_t) {

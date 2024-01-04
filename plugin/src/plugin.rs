@@ -55,7 +55,13 @@ impl PlaybackThread {
 }
 
 impl DBPlugin for OutputPlugin {
-    fn new(plugin: DB_output_t) -> Self {
+    fn get_plugin_ptr(&mut self) -> *mut c_void {
+        &mut self.plugin as *mut DB_output_t as *mut c_void
+    }
+}
+
+impl OutputPlugin {
+    pub fn new(plugin: DB_output_t) -> Self {
         Self {
             plugin,
             state: PlaybackState::Stopped,
@@ -63,21 +69,18 @@ impl DBPlugin for OutputPlugin {
             requested_fmt: None,
         }
     }
-    fn get_plugin_ptr(&mut self) -> *mut c_void {
-        &mut self.plugin as *mut DB_output_t as *mut c_void
-    }
 
-    fn plugin_start(&mut self) {
+    pub fn plugin_start(&mut self) {
         pipewire::init();
     }
-    fn plugin_stop(&mut self) {
+    pub fn plugin_stop(&mut self) {
         unsafe {
             pipewire::deinit();
         }
     }
 
     #[allow(unused)]
-    fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32) {
+    pub fn message(&mut self, msgid: u32, ctx: usize, p1: u32, p2: u32) {
         match msgid {
             DB_EV_VOLUMECHANGED => self.msgtothread(PwThreadMessage::SetVol {
                 newvol: DeadBeef::volume_get_amp(),
@@ -90,18 +93,16 @@ impl DBPlugin for OutputPlugin {
             _ => {}
         }
     }
-}
 
-impl OutputPlugin {
+
     fn msgtothread(&self, msg: PwThreadMessage) {
         if let Some(s) = self.thread.as_ref() {
             s.msg(msg);
         }
     }
-}
 
-impl DBOutput for OutputPlugin {
-    fn init(&mut self) -> i32 {
+
+    pub fn init(&mut self) -> i32 {
         if self.requested_fmt.is_none() {
             self.requested_fmt = Some(get_default_waveformat());
         }
@@ -114,14 +115,14 @@ impl DBOutput for OutputPlugin {
         0
     }
 
-    fn play(&mut self) {
+    pub fn play(&mut self) {
         if self.thread.is_none() {
             self.init();
         }
         self.state = PlaybackState::Playing;
     }
 
-    fn stop(&mut self) {
+    pub fn stop(&mut self) {
         self.msgtothread(PwThreadMessage::Terminate);
         if let Some(t) = self.thread.take() {
             match t.join() {
@@ -135,11 +136,11 @@ impl DBOutput for OutputPlugin {
         self.thread = None;
     }
 
-    fn free(&mut self) {
+    pub fn free(&mut self) {
         self.stop();
     }
 
-    fn pause(&mut self) {
+    pub fn pause(&mut self) {
         if self.thread.is_none() {
             self.init();
         }
@@ -148,7 +149,7 @@ impl DBOutput for OutputPlugin {
         self.state = PlaybackState::Paused;
     }
 
-    fn unpause(&mut self) {
+    pub fn unpause(&mut self) {
         if self.thread.is_none() {
             self.init();
         }
@@ -158,11 +159,11 @@ impl DBOutput for OutputPlugin {
         }
     }
 
-    fn getstate(&self) -> ddb_playback_state_e {
+    pub fn getstate(&self) -> ddb_playback_state_e {
         self.state.as_raw()
     }
 
-    fn setformat(&mut self, fmt: ddb_waveformat_t) {
+    pub fn setformat(&mut self, fmt: ddb_waveformat_t) {
         if fmt == self.plugin.fmt {
             debug!("Format is equal. Not requesting change.");
             return;
@@ -177,7 +178,7 @@ impl DBOutput for OutputPlugin {
         self.msgtothread(PwThreadMessage::SetFmt { format: fmt, state: self.state });
     }
 
-    fn enum_soundcards<F>(&self, callback: F)
+    pub fn enum_soundcards<F>(&self, callback: F)
     where
         F: Fn(&str, &str) + 'static,
     {
