@@ -17,7 +17,7 @@ pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
     DeadBeef::create_output_plugin::<OutputPlugin>(
         api,
         "rustplug",
-        "Pipewire output xx(rust)",
+        "Pipewire output (rust)",
         "Output plugin for PipeWire written in rust",
         include_str!("../../LICENSE"),
         "https://saivert.com",

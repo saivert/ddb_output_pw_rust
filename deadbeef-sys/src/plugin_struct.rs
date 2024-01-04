@@ -1,7 +1,6 @@
-use std::{ffi::{c_char, c_int, c_void}, sync::Mutex};
+use std::{ffi::{c_char, c_int, c_void, CString}, sync::Mutex};
 use once_cell::sync::{Lazy, OnceCell};
 use crate::*;
-use std::ffi::CString;
 
 #[derive(Debug)]
 pub(crate) struct PluginStructWrapper {
