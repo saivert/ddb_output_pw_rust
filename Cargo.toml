@@ -1,7 +1,15 @@
 [workspace]
+resolver = "2"
 
 members = [
   "deadbeef-sys",
   "lossycstring",
   "plugin"
 ]
+
+[profile.release]
+opt-level = 'z'
+codegen-units = 1
+lto = true
+panic = "abort" 
+strip = true
