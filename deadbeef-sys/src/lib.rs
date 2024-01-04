@@ -153,7 +153,7 @@ impl DeadBeef {
                 reserved3: 0,
             },
         };
-        
+
         if let Ok(p) = unsafe { &mut PLUGIN.lock() } {
             let plugin = Box::new(T::new(db_plugin_struct));
             let ptr = plugin.get_plugin_ptr();
