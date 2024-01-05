@@ -176,17 +176,17 @@ impl DeadBeef {
 
         let mut buf: Vec<u8> = vec![0; 4096];
 
+        let tf = unsafe { tf_compile(format.as_ptr()) };
+        if tf <= std::ptr::null_mut() {
+            return Err(DB_TF_Error::CompileError);
+        }
+        let mut ctx = ddb_tf_context_t {
+            _size: std::mem::size_of::<ddb_tf_context_t>() as i32,
+            flags: DDB_TF_CONTEXT_NO_DYNAMIC,
+            it: item.as_ptr(),
+            ..Default::default()
+        };
         unsafe {
-            let tf = tf_compile(format.as_ptr());
-            if tf <= std::ptr::null_mut() {
-                return Err(DB_TF_Error::CompileError);
-            }
-            let mut ctx = ddb_tf_context_t {
-                _size: std::mem::size_of::<ddb_tf_context_t>() as i32,
-                flags: DDB_TF_CONTEXT_NO_DYNAMIC,
-                it: item.as_ptr(),
-                ..Default::default()
-            };
             if tf_eval(&mut ctx as *mut _, tf, buf.as_mut_ptr() as *mut i8, 4096) <= 0 {
                 return Err(DB_TF_Error::EvalError);
             }
