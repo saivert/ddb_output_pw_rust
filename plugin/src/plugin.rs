@@ -182,7 +182,7 @@ impl OutputPlugin {
     where
         F: Fn(&str, &str) + 'static,
     {
-        let mainloop = MainLoop::new().expect("Failed to create mainloop");
+        let mainloop = MainLoop::new(None).expect("Failed to create mainloop");
         let context = Context::new(&mainloop).expect("Failed to create context");
         let core = context.connect(None).expect("Failed to connect to remote");
         let registry = core.get_registry().expect("Failed to get registry");
@@ -304,7 +304,7 @@ fn pw_thread_main(
     init_fmt: ddb_waveformat_t,
     pw_receiver: pipewire::channel::Receiver<PwThreadMessage>,
 ) {
-    let mainloop = MainLoop::new().expect("Failed to create mainloop");
+    let mainloop = MainLoop::new(None).expect("Failed to create mainloop");
     let client_props = properties! {
         *pipewire::keys::APP_NAME => "DeadBeef",
         *pipewire::keys::APP_ID => "music.player.deadbeef",
@@ -471,7 +471,7 @@ fn pw_thread_main(
     }
 
     // When we receive a `Terminate` message, quit the main loop.
-    let _receiver = pw_receiver.attach(&mainloop, {
+    let _receiver = pw_receiver.attach(mainloop.as_ref(), {
         let mainloop = mainloop.clone();
         move |msg| {
             match msg {
