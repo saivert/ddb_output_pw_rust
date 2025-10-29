@@ -4,10 +4,12 @@ use std::rc::Rc;
 use std::{cell::Cell, thread};
 
 use pipewire::{
+    context::Context,
+    core::PW_ID_CORE,
+    main_loop::MainLoop,
     properties::properties,
+    spa::utils::Direction,
     stream::{self, StreamFlags},
-    context::Context, main_loop::MainLoop, core::PW_ID_CORE,
-    spa::utils::Direction
 };
 
 pub struct OutputPlugin {
@@ -29,8 +31,13 @@ enum PwThreadMessage {
     Terminate,
     Pause,
     Unpause,
-    SetFmt { format: ddb_waveformat_t, state: PlaybackState },
-    SetVol { newvol: f32 },
+    SetFmt {
+        format: ddb_waveformat_t,
+        state: PlaybackState,
+    },
+    SetVol {
+        newvol: f32,
+    },
     SetTitle(String),
 }
 
@@ -89,18 +96,16 @@ impl OutputPlugin {
                 if let Ok(media_name) = DeadBeef::titleformat("[%artist% - ]%title%") {
                     self.msgtothread(PwThreadMessage::SetTitle(media_name))
                 }
-            },
+            }
             _ => {}
         }
     }
-
 
     fn msgtothread(&self, msg: PwThreadMessage) {
         if let Some(s) = self.thread.as_ref() {
             s.msg(msg);
         }
     }
-
 
     pub fn init(&mut self) -> i32 {
         if self.requested_fmt.is_none() {
@@ -175,7 +180,10 @@ impl OutputPlugin {
         };
         self.requested_fmt = Some(self.plugin.fmt);
         print_db_format(fmt);
-        self.msgtothread(PwThreadMessage::SetFmt { format: fmt, state: self.state });
+        self.msgtothread(PwThreadMessage::SetFmt {
+            format: fmt,
+            state: self.state,
+        });
     }
 
     pub fn enum_soundcards<F>(&self, callback: F)
@@ -295,7 +303,8 @@ fn create_audio_format_pod(
         }),
     )
     .unwrap()
-    .0.into_inner();
+    .0
+    .into_inner();
 
     pipewire::spa::pod::Pod::from_bytes(values).unwrap()
 }
@@ -504,12 +513,7 @@ fn pw_thread_main(
                         };
 
                         if stream
-                            .connect(
-                                Direction::Output,
-                                None,
-                                flags,
-                                &mut [&newformatpod],
-                            )
+                            .connect(Direction::Output, None, flags, &mut [&newformatpod])
                             .is_err()
                         {
                             DeadBeef::log_detailed(
@@ -526,7 +530,6 @@ fn pw_thread_main(
                             "node.latency" => "1200/48000",
                         };
                         update_stream_props(&stream, &props);
-
                     }
                 }
                 PwThreadMessage::SetVol { newvol } => {
@@ -534,7 +537,7 @@ fn pw_thread_main(
                     stream
                         .set_control(libspa_sys::SPA_PROP_channelVolumes, &values)
                         .expect("Unable to set volume");
-                },
+                }
                 PwThreadMessage::SetTitle(title) => {
                     let props = properties! {
                         *pipewire::keys::MEDIA_NAME => title,

@@ -1,11 +1,23 @@
 [workspace]
 resolver = "2"
-
 members = [
   "deadbeef-sys",
   "lossycstring",
   "plugin"
 ]
+
+[workspace.package]
+authors = ["Nicolai Syvertsen <saivert@saivert.com"]
+categories = ["plugin", "multimedia"]
+edition = "2021"
+homepage = "https://saivert.com"
+license = "MIT"
+repository = "https://github.com/saivert/ddb_output_pw_rust"
+rust-version = "1.77"
+version = "0.0.1"
+
+
+
 
 [profile.release]
 opt-level = 'z'

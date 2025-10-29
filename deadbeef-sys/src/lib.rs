@@ -261,3 +261,16 @@ impl std::fmt::Debug for PlaybackState {
         f.write_str(&name)
     }
 }
+
+impl PartialEq for ddb_waveformat_t {
+    fn eq(&self, other: &Self) -> bool {
+        self.channels == other.channels &&
+        self.samplerate == other.samplerate &&
+        self.bps == other.bps &&
+        self.channelmask == other.channelmask &&
+        self.is_float == other.is_float &&
+        self.flags == other.flags
+    }
+}
+
+impl Eq for ddb_waveformat_t {}

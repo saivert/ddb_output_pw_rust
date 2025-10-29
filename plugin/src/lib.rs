@@ -1,4 +1,4 @@
-use std::{ffi::{c_char, c_int, c_void}, sync::Mutex};
+use std::{ffi::{c_char, c_int, c_void}, mem::MaybeUninit, sync::Mutex};
 use once_cell::sync::Lazy;
 use deadbeef_sys::*;
 
@@ -32,11 +32,11 @@ static mut PLUGIN: Lazy<Mutex<OutputPlugin>> = Lazy::new(|| {
             version_minor: 1,
             flags: DDB_PLUGIN_FLAG_LOGGING,
             type_: DB_PLUGIN_OUTPUT as i32,
-            id: lit_cstr!("pipewirerust"),
-            name: lit_cstr!("Pipewire output plugin (rust)"),
-            descr: lit_cstr!("This is a new Pipewire based plugin written in rust"),
-            copyright: lit_cstr!(include_str!("../../LICENSE")),
-            website: lit_cstr!("https://saivert.com"),
+            id: c"pipewirerust".as_ptr(),
+            name: c"Pipewire output plugin (rust)".as_ptr(),
+            descr: c"This is a new Pipewire based plugin written in rust".as_ptr(),
+            copyright: concat!(include_str!("../../LICENSE"),"\0").as_ptr() as *const i8,
+            website: c"https://saivert.com".as_ptr(),
             start: Some(plugin_start),
             stop: Some(plugin_stop),
             message: Some(message),
@@ -186,7 +186,7 @@ extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_int {
 ///
 /// # Safety
 /// This is requires since this is a plugin export function
-pub unsafe extern "C" fn libdeadbeef_rust_plugin_load(
+pub unsafe extern "C" fn ddb_output_pw_rust_load(
     api: *const DB_functions_t,
 ) -> *mut DB_plugin_t {
     DeadBeef::init_from_ptr(api, PLUGIN.get_mut().expect("Plugin static mut being set."))

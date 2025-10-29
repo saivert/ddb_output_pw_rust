@@ -25,9 +25,7 @@ fn main() {
     // the resulting bindings.
     let mut builder = bindgen::Builder::default();
     builder = builder.header("wrapper.h")
-                .rustfmt_bindings(true)
                 .derive_default(true)
-                .derive_eq(true)
                 .default_enum_style(bindgen::EnumVariation::Consts)
                 .prepend_enum_name(false);
 
@@ -41,7 +39,7 @@ fn main() {
 
     // Tell cargo to invalidate the built crate whenever any of the
     // included header files changed.
-    builder = builder.parse_callbacks(Box::new(bindgen::CargoCallbacks));
+    builder = builder.parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
 
     // Finish the builder and generate the bindings.
     let bindings = builder.generate().expect("Unable to generate bindings");

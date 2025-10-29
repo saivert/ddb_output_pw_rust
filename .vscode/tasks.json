@@ -1,31 +1,26 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"type": "cargo",
-			"command": "build",
-			"problemMatcher": [
-				"$rustc"
-			],
-			"label": "rust: cargo build"
-		},
-		{
-			"type": "shell",
-			"command": "cp ${workspaceFolder}/target/debug/libdeadbeef_rust_plugin.so ~/.local/lib64/deadbeef",
-			"label": "deploy"
-		},
-		{
-			"label": "build and deploy",
-			"dependsOn": [
-				"rust: cargo build",
-				"deploy"
-			],
-			"dependsOrder": "sequence",
-			"problemMatcher": "$rustc",
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "cargo",
+      "command": "build",
+      "problemMatcher": ["$rustc"],
+      "label": "rust: cargo build"
+    },
+    {
+      "type": "shell",
+      "command": "cp ${workspaceFolder}/target/debug/libdeadbeef_rust_plugin.so ~/.local/lib64/deadbeef",
+      "label": "deploy"
+    },
+    {
+      "label": "build and deploy",
+      "dependsOn": ["rust: cargo build", "deploy"],
+      "dependsOrder": "sequence",
+      "problemMatcher": "$rustc",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
 }

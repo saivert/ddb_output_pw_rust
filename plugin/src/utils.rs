@@ -67,12 +67,6 @@ pub fn update_stream_props(stream: &pipewire::stream::Stream, props: &Properties
     }
 }
 
-macro_rules! lit_cstr {
-    ($s:expr) => {
-        (concat!($s, "\0").as_bytes().as_ptr() as *const c_char)
-    };
-}
-
 macro_rules! debug {
     ($s:expr) => {
         {
