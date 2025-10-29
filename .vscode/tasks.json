@@ -9,7 +9,7 @@
     },
     {
       "type": "shell",
-      "command": "cp ${workspaceFolder}/target/debug/libdeadbeef_rust_plugin.so ~/.local/lib64/deadbeef",
+      "command": "cp ${workspaceFolder}/target/debug/libddb_output_pw_rust.so ~/.local/lib64/deadbeef/ddb_output_pw_rust.so",
       "label": "deploy"
     },
     {
