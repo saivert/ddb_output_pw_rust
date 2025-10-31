@@ -62,8 +62,8 @@ impl PlaybackThread {
 }
 
 impl DBPlugin for OutputPlugin {
-    fn get_plugin_ptr(&mut self) -> *mut c_void {
-        &mut self.plugin as *mut DB_output_t as *mut c_void
+    fn get_plugin_ptr(&self) -> *const c_void {
+        &self.plugin as *const DB_output_t as *mut c_void
     }
 }
 

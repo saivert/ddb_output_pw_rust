@@ -1,4 +1,4 @@
-use std::{ffi::{c_char, c_int, c_void}, mem::MaybeUninit, sync::Mutex};
+use std::{ffi::{c_char, c_int, c_void}, sync::Mutex};
 use once_cell::sync::Lazy;
 use deadbeef_sys::*;
 
@@ -10,7 +10,9 @@ use utils::*;
 mod plugin;
 use plugin::*;
 
-static mut PLUGIN: Lazy<Mutex<OutputPlugin>> = Lazy::new(|| {
+unsafe impl Send for OutputPlugin {}
+
+static PLUGIN: Lazy<Mutex<OutputPlugin>> = Lazy::new(|| {
     let x = DB_output_t {
         init: Some(init),
         free: Some(free),
@@ -56,41 +58,32 @@ static mut PLUGIN: Lazy<Mutex<OutputPlugin>> = Lazy::new(|| {
 
 extern "C" fn init() -> c_int {
     debug!("rustplug::init");
-    unsafe
-    {
-        if let Ok(p) = &mut PLUGIN.lock() {
-            p.init();
-        }
+    if let Ok(mut p) = PLUGIN.lock() {
+        p.init();
     }
     0
 }
 
 extern "C" fn free() -> c_int {
     debug!("rustplug::free");
-    unsafe {
-        if let Ok(p) = &mut PLUGIN.lock() {
-            p.free();
-        }
+    if let Ok(mut p) = PLUGIN.lock() {
+        p.free();
     }
     0
 }
 
 extern "C" fn setformat(fmt: *mut ddb_waveformat_t) -> c_int {
     debug!("rustplug::setformat");
-    unsafe {
-        if let Ok(p) = &mut PLUGIN.lock() {
-            p.setformat(*fmt);
-        }
+    if let Ok(mut p) = PLUGIN.lock() {
+        unsafe { p.setformat(*fmt); }
     }
     0
 }
 
 extern "C" fn play() -> c_int {
     debug!("rustplug::play");
-    unsafe {
-        if let Ok(p) = &mut PLUGIN.lock() {
-            p.play();
-        }
+    if let Ok(mut p) = PLUGIN.lock() {
+        p.play();
     }
     0
 }
@@ -98,58 +91,46 @@ extern "C" fn play() -> c_int {
 
 extern "C" fn stop() -> c_int {
     debug!("rustplug::stop");
-    unsafe {
-        if let Ok(p) = &mut PLUGIN.lock() {
-            p.stop();
-        }
+    if let Ok(mut p) = PLUGIN.lock() {
+        p.stop();
     }
     0
 }
 
 extern "C" fn pause() -> c_int {
     debug!("rustplug::pause");
-    unsafe {
-        if let Ok(p) = &mut PLUGIN.lock() {
-            p.pause();
-        }
+    if let Ok(mut p) = PLUGIN.lock() {
+        p.pause();
     }
     0
 }
 
 extern "C" fn unpause() -> c_int {
     debug!("rustplug::unpause");
-    unsafe {
-        if let Ok(p) = &mut PLUGIN.lock() {
-            p.unpause();
-        }
+    if let Ok(mut p) = PLUGIN.lock() {
+        p.unpause();
     }
     0
 }
 
 extern "C" fn getstate() -> ddb_playback_state_t {
-    unsafe {
-        if let Ok(p) = &PLUGIN.lock() {
-            p.getstate()
-        } else {
-            DDB_PLAYBACK_STATE_STOPPED
-        }
+    if let Ok(p) = PLUGIN.lock() {
+        p.getstate()
+    } else {
+        DDB_PLAYBACK_STATE_STOPPED
     }
 }
 
 extern "C" fn plugin_start() -> c_int {
-    unsafe {
-        if let Ok(p) = &mut PLUGIN.lock(){
-            p.plugin_start();
-        }
+    if let Ok(mut p) = PLUGIN.lock(){
+        p.plugin_start();
     }
     0
 }
 
 extern "C" fn plugin_stop() -> c_int {
-    unsafe {
-        if let Ok(p) = &mut PLUGIN.lock(){
-            p.plugin_stop();
-        }
+    if let Ok(mut p) = PLUGIN.lock(){
+        p.plugin_stop();
     }
     0
 }
@@ -174,10 +155,8 @@ extern "C" fn enum_soundcards(
 
 
 extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_int {
-    unsafe {
-        if let Ok(p) = PLUGIN.get_mut() {
-            p.message(msgid, ctx, p1, p2);
-        }
+    if let Ok(mut p) = PLUGIN.lock() {
+        p.message(msgid, ctx, p1, p2);
     }
     0
 }
@@ -185,9 +164,9 @@ extern "C" fn message(msgid: u32, ctx: usize, p1: u32, p2: u32) -> c_int {
 #[no_mangle]
 ///
 /// # Safety
-/// This is requires since this is a plugin export function
+/// This is required since this is a plugin export function
 pub unsafe extern "C" fn ddb_output_pw_rust_load(
     api: *const DB_functions_t,
 ) -> *mut DB_plugin_t {
-    DeadBeef::init_from_ptr(api, PLUGIN.get_mut().expect("Plugin static mut being set."))
+    DeadBeef::init_from_ptr(api, &*PLUGIN.lock().unwrap())
 }
