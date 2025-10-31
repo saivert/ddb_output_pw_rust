@@ -56,11 +56,6 @@ impl DeadBeef {
         ptr
     }
 
-    pub fn set_plugin_ptr(ptr: *mut DB_plugin_t) {
-        let deadbeef = unsafe { DeadBeef::deadbeef() };
-        deadbeef.plugin_ptr = ptr;
-    }
-
     pub unsafe fn deadbeef() -> &'static mut DeadBeef {
         match DEADBEEF {
             Some(ref mut w) => w,
