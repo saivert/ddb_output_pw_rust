@@ -25,7 +25,7 @@ pub struct DeadBeef {
 }
 
 pub trait DBPlugin {
-    fn get_plugin_ptr(&self) -> *const c_void;
+    fn get_plugin_ptr(&self) -> *const DB_output_t;
 }
 
 #[derive(Error, Debug)]
@@ -98,7 +98,7 @@ impl DeadBeef {
         let msg = LossyCString::new(msg);
         unsafe {
             // Silence the bindgen/FFI signature mismatch by casting to the expected 3-arg signature.
-            #[allow(clippy::transmute_ptr_to_ptr)]
+            
             let log_detailed_fn: unsafe extern "C" fn(*mut DB_plugin_t, u32, *const i8) =
             std::mem::transmute(log_detailed);
             log_detailed_fn(deadbeef.plugin_ptr as *mut DB_plugin_t, layers, msg.as_ptr());
