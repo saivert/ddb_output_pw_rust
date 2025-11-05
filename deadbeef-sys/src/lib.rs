@@ -3,6 +3,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(clippy::all)]
+#![allow(unnecessary_transmutes)]
 
 use lossycstring::LossyCString;
 
@@ -65,13 +66,13 @@ impl DeadBeef {
 
     pub(crate) fn check_thread() {
         let deadbeef_thread_id = unsafe {
-            DEADBEEF_THREAD_ID.as_ref().expect(
+            DEADBEEF_THREAD_ID.expect(
                 "DeadBeef main thread ID wasn't found, plugin \
                  wasn't correctly initialized",
             )
         };
 
-        if std::thread::current().id() != *deadbeef_thread_id {
+        if std::thread::current().id() != deadbeef_thread_id {
             panic!(
                 "Deadbeef methods can be only called from the main Deadbeef \
                  thread."
